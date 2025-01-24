@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const enginePlay = @import("enginePlay.zig");
 
 // stdout/stdin init
 const stdout_file = std.io.getStdOut().writer();
@@ -25,51 +26,91 @@ const Command = struct {
     handler: *const fn (allocator: std.mem.Allocator) anyerror!void,
 };
 
-// List of available commands with their handlers
-const commands = [_]Command{
-    .{
-        .name = "docs",
-        .description = "Open the zduel docs in your default browser",
-        .usage = "zduel docs",
-        .category = "Documentation",
-        .handler = openDocs,
-    },
-    .{
-        .name = "help",
-        .description = "Display help information",
-        .usage = "zduel help",
-        .category = "Documentation",
-        .handler = showHelp,
-    },
-    .{
-        .name = "engines",
-        .description = "List and manage chess engines",
-        .usage = "zduel engines [list|add|remove]",
-        .category = "Engine Management",
-        .handler = handleEngines,
-    },
+pub const CLI = struct {
+    allocator: std.mem.Allocator,
+    engine_manager: *enginePlay.EngineManager,
+
+    pub fn init(allocator: std.mem.Allocator, engine_manager: *enginePlay.EngineManager) CLI {
+        return .{
+            .allocator = allocator,
+            .engine_manager = engine_manager,
+        };
+    }
+
+    // List of available commands with their handlers
+    const commands = [_]Command{
+        .{
+            .name = "docs",
+            .description = "Open the zduel docs in your default browser",
+            .usage = "zduel docs",
+            .category = "Documentation",
+            .handler = openDocs,
+        },
+        .{
+            .name = "help",
+            .description = "Display help information",
+            .usage = "zduel help",
+            .category = "Documentation",
+            .handler = showHelp,
+        },
+        .{
+            .name = "engines",
+            .description = "List and manage chess engines",
+            .usage = "zduel engines [list|add|remove]",
+            .category = "Engine Management",
+            .handler = handleEngines,
+        },
+    };
+
+    pub fn handleCommand(self: *CLI, cmd_name: []const u8) !void {
+        const colors = Color{};
+
+        // Look for matching command
+        for (commands) |cmd| {
+            if (std.mem.eql(u8, cmd.name, cmd_name)) {
+                try cmd.handler(self.allocator);
+                return;
+            }
+        }
+
+        // Command not found
+        try stdout.print("{s}Unknown command: {s}{s}\n", .{ colors.red, cmd_name, colors.reset });
+        try bw.flush();
+    }
+
+    pub fn runInteractiveMode(self: *CLI) !void {
+        const colors = Color{};
+        var buf: [1024]u8 = undefined;
+
+        try printHeader();
+        try stdout.print("Type \"{s}help{s}\" to get started, or \"{s}quit{s}\" to exit.\n", .{ colors.green, colors.reset, colors.green, colors.reset });
+
+        while (true) {
+            try stdout.print("> ", .{});
+            try bw.flush();
+
+            if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |user_input| {
+                const trimmed = std.mem.trim(u8, user_input, &std.ascii.whitespace);
+                if (trimmed.len == 0) continue;
+
+                if (std.mem.eql(u8, trimmed, "quit")) break;
+
+                try self.handleCommand(trimmed);
+            } else break;
+        }
+    }
 };
 
+// Keep existing helper functions...
 fn printHeader() !void {
     const colors = Color{};
     try stdout.print("\n{s}zduel{s} - A CLI Chess Tool\n", .{ colors.yellow, colors.reset });
     try stdout.print("========================\n\n", .{});
 }
 
-// Unified command handler
-pub fn handleCommand(allocator: std.mem.Allocator, cmd_name: []const u8) !void {
-    const colors = Color{};
-
-    // Look for matching command
-    for (commands) |cmd| {
-        if (std.mem.eql(u8, cmd.name, cmd_name)) {
-            try cmd.handler(allocator);
-            return;
-        }
-    }
-
-    // Command not found
-    try stdout.print("{s}Unknown command: {s}{s}\n", .{ colors.red, cmd_name, colors.reset });
+// Handler functions...
+fn handleEngines(allocator: std.mem.Allocator) !void {
+    try enginePlay.handleEngines(allocator);
     try bw.flush();
 }
 
@@ -92,7 +133,7 @@ fn showHelp(allocator: std.mem.Allocator) !void {
 
     // Group commands by category
     var current_category: ?[]const u8 = null;
-    for (commands) |cmd| {
+    for (CLI.commands) |cmd| {
         if (current_category == null or !std.mem.eql(u8, current_category.?, cmd.category)) {
             try stdout.print("\n{s}{s}:{s}\n", .{ colors.yellow, cmd.category, colors.reset });
             current_category = cmd.category;
@@ -124,13 +165,6 @@ fn openDocs(allocator: std.mem.Allocator) !void {
     _ = try process.wait();
 }
 
-fn handleEngines(allocator: std.mem.Allocator) !void {
-    _ = allocator; // Unused but required for consistent handler signature
-    // TODO: Implement engine management
-    try stdout.print("Engine management coming soon!\n", .{});
-    try bw.flush();
-}
-
 // Interactive mode
 pub fn runInteractiveMode(allocator: std.mem.Allocator) !void {
     const colors = Color{};
@@ -149,7 +183,7 @@ pub fn runInteractiveMode(allocator: std.mem.Allocator) !void {
 
             if (std.mem.eql(u8, trimmed, "quit")) break;
 
-            try handleCommand(allocator, trimmed);
+            try CLI.handleCommand(allocator, trimmed);
         } else break;
     }
 }

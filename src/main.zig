@@ -4,7 +4,7 @@
 //! It provides a flexible interface for chess engine interaction and game analysis.
 //!
 //! ## Current Features
-//! - None
+//! - Engine management and execution
 //!
 //! ## Planned Features
 //! - Support for multiple chess engines
@@ -15,18 +15,31 @@
 //! ## Usage
 //! ```zig
 //! zduel --help  // Get help
+//! zduel engines // Manage engines
 //! ```
 //!
 //! ## Project Status
 //! zduel is under active development. Features and API may change
 //! as the project evolves.
+
 const std = @import("std");
 const cli = @import("cli.zig");
+const enginePlay = @import("enginePlay.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
+
+    // Create engine manager
+    var manager = try enginePlay.EngineManager.init(allocator);
+    defer manager.deinit();
+
+    // Scan for available engines at startup
+    try manager.scanEngines();
+
+    // Initialize CLI
+    var cli_handler = cli.CLI.init(allocator, &manager);
 
     // Parse command line arguments
     var args = std.process.args();
@@ -39,26 +52,10 @@ pub fn main() !void {
         else
             arg;
 
-        try cli.handleCommand(allocator, cmd);
+        try cli_handler.handleCommand(cmd);
         return;
     }
 
     // No arguments, run in interactive mode
-    try cli.runInteractiveMode(allocator);
-}
-
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit();
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
-
-test "fuzz example" {
-    const global = struct {
-        fn testOne(input: []const u8) anyerror!void {
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
-        }
-    };
-    try std.testing.fuzz(global.testOne, .{});
+    try cli_handler.runInteractiveMode();
 }
