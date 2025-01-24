@@ -1,3 +1,28 @@
+//!
+//!
+//! zduel: A Command Line Chess Tool
+//!
+//! zduel is a command-line tool for playing and analyzing chess games.
+//! It provides a flexible interface for chess engine interaction and game analysis.
+//!
+//! ## Current Features
+//! - None
+//!
+//! ## Planned Features
+//! - Support for multiple chess engines
+//! - Engine vs engine matches
+//! - Custom engine configuration
+//! - Tournament organization between multiple engines
+//!
+//! ## Usage
+//! ```zig
+//! zduel --help  // Get help
+//! ```
+//!
+//! ## Project Status
+//! zduel is under active development. Features and API may change
+//! as the project evolves.
+
 const std = @import("std");
 const cli = @import("cli.zig");
 

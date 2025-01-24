@@ -6,28 +6,85 @@ const stdin = std.io.getStdIn().reader();
 var bw = std.io.bufferedWriter(stdout_file);
 const stdout = bw.writer();
 
-// for colored terminal output
-const yellow = "\x1b[33m";
-const green = "\x1b[32m";
-const red = "\x1b[31m";
-const reset = "\x1b[0m";
-const underline = "\x1b[4m";
+// ANSI color codes
+const Color = struct {
+    yellow: []const u8 = "\x1b[33m",
+    green: []const u8 = "\x1b[32m",
+    reset: []const u8 = "\x1b[0m",
+    underline: []const u8 = "\x1b[4m",
+};
+
+// Command structure for easy addition of new commands
+const Command = struct {
+    name: []const u8,
+    description: []const u8,
+    usage: []const u8,
+    category: []const u8,
+};
+
+/// Contains a list of arguments you can provide zduel at runtime or
+/// provide via stdin.
+/// Template for adding new commands:
+/// .{
+///    .name = "command_name",
+///    .description = "Brief description of what the command does",
+///    .usage = "zduel command_name [subcommands]",
+///    .category = "Category Name",
+/// },
+const commands = [_]Command{
+    .{
+        .name = "docs",
+        .description = "Open the zduel docs",
+        .usage = "zduel docs",
+        .category = "Documentation",
+    },
+    .{
+        .name = "help",
+        .description = "You're already here",
+        .usage = "zduel help",
+        .category = "Documentation",
+    },
+    .{
+        .name = "engines",
+        .description = "List and manage chess engines",
+        .usage = "zduel engines [list|add|remove]",
+        .category = "Engine Management",
+    },
+};
 
 pub fn runHelpMode() !void {
-    try stdout.print("Welcome to {s}zduel{s}, a CLI chess tool.\n", .{ yellow, reset });
-    try stdout.print("This is the {s}help{s} menu.\n", .{ green, reset });
-    try stdout.print("I would highly recommend starting with our docs:\n", .{});
+    const colors = Color{};
+    const doc_url = "https://example.com/docs";
 
-    // Link to documentation (Using the ANSI escape sequence for a clickable link)
-    const docUrl = "https://example.com/docs";
-    try stdout.print("\x1b]8;;{s}\x1b\\{s}{s}help{s}\x1b]8;;\x1b\\\n", .{ docUrl, green, underline, reset });
+    // Print header
+    try stdout.print("\n{s}zduel{s} - A CLI Chess Tool\n", .{ colors.yellow, colors.reset });
+    try stdout.print("======================\n\n", .{});
 
-    try stdout.print("Commands: \n", .{});
-    try stdout.print("engines\n", .{});
+    // Print documentation link
+    try stdout.print("📚 {s}Documentation{s} ", .{ colors.green, colors.reset });
+    try stdout.print("\x1b]8;;{s}\x1b\\{s}{s}{s}\x1b]8;;\x1b\\\n\n", .{ doc_url, colors.green, colors.underline, colors.reset });
 
-    try stdout.print("> ", .{});
+    // Print available commands
+    try stdout.print("{s}Available Commands:{s}\n", .{ colors.green, colors.reset });
+    try stdout.print("------------------\n", .{});
 
-    try bw.flush(); // Don't forget to flush
+    // Group commands by category
+    var current_category: ?[]const u8 = null;
+    for (commands) |cmd| {
+        // Print category header if it's a new category
+        if (current_category == null or !std.mem.eql(u8, current_category.?, cmd.category)) {
+            try stdout.print("\n{s}{s}:{s}\n", .{ colors.yellow, cmd.category, colors.reset });
+            current_category = cmd.category;
+        }
+
+        // Print command details
+        try stdout.print("  {s}{s}{s}\n", .{ colors.green, cmd.name, colors.reset });
+        try stdout.print("    Description: {s}\n", .{cmd.description});
+        try stdout.print("    Usage: {s}\n", .{cmd.usage});
+    }
+
+    try stdout.print("\n> ", .{});
+    try bw.flush();
 }
 
 pub fn runDefaultMode() !void {
