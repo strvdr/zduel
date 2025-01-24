@@ -15,7 +15,9 @@
 //! ## Usage
 //! ```zig
 //! zduel --help  // Get help
-//! zduel engines // Manage engines
+//! zduel --engines // Manage engines
+//! zduel --docs // Open the docs
+//! zduel --engines // Manage engines
 //! ```
 //!
 //! ## Project Status
