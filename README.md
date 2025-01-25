@@ -33,6 +33,12 @@ The executable will be available at `zig-out/bin/zduel`
 ```bash
 ./zduel
 ```
+### Engine Setup
+1. Create an `engines` directory in your zduel folder
+2. Place UCI-compatible chess engines in the directory
+3. Use `engines` command to manage them
+
+If you don't have any chess engines installed, I recommend my engines [Kirin(C)](https://github.com/strvdr/kirin-v0) and [Kirin(Zig)](https://github.com/strvdr/kirin-chess) as a place to start. They are both UCI compatible chess engines in the ~2000 elo range. 
 
 ### Available Commands
 - `help` - Display commands and usage
@@ -45,11 +51,6 @@ The executable will be available at `zig-out/bin/zduel`
 - Rapid (5 seconds per move)  
 - Classical (15 seconds per move)
 - Tournament (Best of 3 rapid games)
-
-### Engine Setup
-1. Create an `engines` directory in your zduel folder
-2. Place UCI-compatible chess engines in the directory
-3. Use `engines` command to manage them
 
 ## Project Structure
 ```
