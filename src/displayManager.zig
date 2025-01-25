@@ -10,10 +10,10 @@ const stdout = bw.writer();
 pub const DisplayManager = struct {
     allocator: std.mem.Allocator,
     colors: Color,
-    board: [8][8]?Piece,
-    move_list_start_line: usize,
-    board_start_line: usize,
-    current_move: usize,
+    board: [8][8]?*Piece, // Change to store pointers to pieces
+    moveListStartLine: usize,
+    boardStartLine: usize,
+    currentMove: usize,
 
     const PieceColor = enum(u1) { white = 0, black = 1 };
     const PieceKind = enum(u3) { pawn = 0, knight = 1, bishop = 2, rook = 3, queen = 4, king = 5 };
@@ -44,7 +44,10 @@ pub const DisplayManager = struct {
             };
 
             return if (kind_int) |ki|
-                Piece{ .color = color, .kind = @enumFromInt(ki) }
+                Piece{
+                    .color = color,
+                    .kind = @enumFromInt(ki),
+                }
             else
                 null;
         }
@@ -55,13 +58,20 @@ pub const DisplayManager = struct {
         try stdout.print("\x1b[2J\x1b[?25l", .{});
         try bw.flush();
 
+        var board: [8][8]?*Piece = undefined;
+        for (&board) |*rank| {
+            for (rank) |*square| {
+                square.* = null;
+            }
+        }
+
         return DisplayManager{
             .allocator = allocator,
             .colors = Color{},
-            .board = undefined,
-            .move_list_start_line = 5, // Leave space for header
-            .board_start_line = 5,
-            .current_move = 0,
+            .board = board,
+            .moveListStartLine = 5,
+            .boardStartLine = 5,
+            .currentMove = 0,
         };
     }
 
@@ -70,16 +80,18 @@ pub const DisplayManager = struct {
         stdout.print("\x1b[?25h", .{}) catch {};
         bw.flush() catch {};
 
-        // Clear board state
+        // Free all allocated pieces
         for (&self.board) |*rank| {
             for (rank) |*square| {
+                if (square.*) |piece| {
+                    self.allocator.destroy(piece);
+                }
                 square.* = null;
             }
         }
     }
 
     pub fn initializeBoard(self: *DisplayManager) !void {
-        // Parse starting position FEN
         try self.loadFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR");
         try self.drawBoard();
         try self.drawMoveList();
@@ -103,9 +115,47 @@ pub const DisplayManager = struct {
             }
 
             if (Piece.fromChar(c)) |piece| {
-                self.board[rank][file] = piece;
+                const newPiece = try self.allocator.create(Piece);
+                newPiece.* = piece;
+                if (self.board[rank][file]) |oldPiece| {
+                    self.allocator.destroy(oldPiece);
+                }
+                self.board[rank][file] = newPiece;
             }
             file += 1;
+        }
+    }
+
+    fn applyMove(self: *DisplayManager, moveStr: []const u8) !void {
+        const fromFile = moveStr[0] - 'a';
+        const fromRank = '8' - moveStr[1];
+        const toFile = moveStr[2] - 'a';
+        const toRank = '8' - moveStr[3];
+
+        if (self.board[fromRank][fromFile]) |piece| {
+            // Handle promotion
+            if (moveStr.len > 4 and piece.kind == .pawn) {
+                if (Piece.fromChar(moveStr[4])) |promoted| {
+                    const newPiece = try self.allocator.create(Piece);
+                    newPiece.* = promoted;
+
+                    if (self.board[toRank][toFile]) |oldPiece| {
+                        self.allocator.destroy(oldPiece);
+                    }
+
+                    self.board[toRank][toFile] = newPiece;
+                    self.allocator.destroy(piece);
+                    self.board[fromRank][fromFile] = null;
+                    return;
+                }
+            }
+
+            // Regular move
+            if (self.board[toRank][toFile]) |oldPiece| {
+                self.allocator.destroy(oldPiece);
+            }
+            self.board[toRank][toFile] = piece;
+            self.board[fromRank][fromFile] = null;
         }
     }
 
@@ -116,42 +166,48 @@ pub const DisplayManager = struct {
         try stdout.print("\x1b[s", .{});
 
         // Move cursor to board position (right side)
-        try stdout.print("\x1b[{d};40H", .{self.board_start_line});
+        try stdout.print("\x1b[{d};40H", .{self.boardStartLine});
 
         // Draw board frame
-        try stdout.print("  ┌──────────────────────┐\n", .{});
+        try stdout.print("  ┌────────────────────────┐\n", .{});
 
         var rank: usize = 0;
         while (rank < 8) : (rank += 1) {
-            try stdout.print("\x1b[{d};40H", .{self.board_start_line + 1 + rank});
+            try stdout.print("\x1b[{d};40H", .{self.boardStartLine + 1 + rank});
             try stdout.print("{d} │", .{8 - rank});
 
             var file: usize = 0;
             while (file < 8) : (file += 1) {
-                const square_color = if ((rank + file) % 2 == 0)
+                const squareColor = if ((rank + file) % 2 == 0)
                     "\x1b[47m" // white background
                 else
                     "\x1b[100m"; // gray background
 
-                try stdout.print("{s}", .{square_color});
+                try stdout.print("{s}", .{squareColor});
 
                 if (self.board[rank][file]) |piece| {
-                    const piece_color = if (piece.color == .white)
+                    const pieceColor = if (piece.color == .white)
                         c.blue
                     else
-                        c.magenta;
-                    try stdout.print(" {s}{c}{s} ", .{ piece_color, piece.toChar(), c.reset });
+                        c.red;
+                    try stdout.print("{s}{s} {s}{c} {s}", .{
+                        c.reset,
+                        squareColor,
+                        pieceColor,
+                        piece.toChar(),
+                        c.reset,
+                    });
                 } else {
                     try stdout.print("   ", .{});
                 }
-                try stdout.print("\x1b[0m", .{});
+                try stdout.print("{s}", .{c.reset});
             }
             try stdout.print("│\n", .{});
         }
 
-        try stdout.print("\x1b[{d};40H", .{self.board_start_line + 9});
-        try stdout.print("  └──────────────────────┘\n", .{});
-        try stdout.print("\x1b[{d};40H", .{self.board_start_line + 10});
+        try stdout.print("\x1b[{d};40H", .{self.boardStartLine + 9});
+        try stdout.print("  └────────────────────────┘\n", .{});
+        try stdout.print("\x1b[{d};40H", .{self.boardStartLine + 10});
         try stdout.print("    a  b  c  d  e  f  g  h\n", .{});
 
         // Restore cursor position
@@ -162,69 +218,44 @@ pub const DisplayManager = struct {
         // Clear move list area
         var i: usize = 0;
         while (i < 20) : (i += 1) {
-            try stdout.print("\x1b[{d};0H\x1b[K", .{self.move_list_start_line + i});
+            try stdout.print("\x1b[{d};0H\x1b[K", .{self.moveListStartLine + i});
         }
     }
 
-    pub fn updateMove(self: *DisplayManager, move_str: []const u8, player: []const u8, move_number: usize) !void {
+    pub fn updateMove(self: *DisplayManager, moveStr: []const u8, player: []const u8, moveNumber: usize) !void {
         const c = self.colors;
 
         // Save cursor position
         try stdout.print("\x1b[s", .{});
 
         // Move to appropriate line in move list
-        const line = self.move_list_start_line + @divFloor(move_number - 1, 2);
+        const line = self.moveListStartLine + @divFloor(moveNumber - 1, 2);
         try stdout.print("\x1b[{d};0H", .{line});
 
-        if (move_number % 2 == 1) {
-            // White's move
+        if (moveNumber % 2 == 1) {
             try stdout.print("{d}. {s}{s}{s} {s}", .{
-                @divFloor(move_number + 1, 2),
+                @divFloor(moveNumber + 1, 2),
                 c.blue,
-                move_str,
+                moveStr,
                 c.reset,
                 player,
             });
         } else {
-            // Black's move - move cursor to middle of line
             try stdout.print("\x1b[{d};20H{s}{s}{s} {s}", .{
                 line,
                 c.magenta,
-                move_str,
+                moveStr,
                 c.reset,
                 player,
             });
         }
 
         // Update board based on move
-        try self.applyMove(move_str);
+        try self.applyMove(moveStr);
         try self.drawBoard();
 
         // Restore cursor position
         try stdout.print("\x1b[u", .{});
         try bw.flush();
-    }
-
-    fn applyMove(self: *DisplayManager, move_str: []const u8) !void {
-        const from_file = move_str[0] - 'a';
-        const from_rank = '8' - move_str[1];
-        const to_file = move_str[2] - 'a';
-        const to_rank = '8' - move_str[3];
-
-        // Move piece
-        if (self.board[from_rank][from_file]) |piece| {
-            self.board[to_rank][to_file] = piece;
-            self.board[from_rank][from_file] = null;
-
-            // Handle promotion
-            if (move_str.len > 4 and piece.kind == .pawn) {
-                if (Piece.fromChar(move_str[4])) |promoted_piece| {
-                    self.board[to_rank][to_file] = Piece{
-                        .color = piece.color,
-                        .kind = promoted_piece.kind,
-                    };
-                }
-            }
-        }
     }
 };

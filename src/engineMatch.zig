@@ -4,23 +4,24 @@ const Engine = enginePlay.Engine;
 const EngineManager = enginePlay.EngineManager;
 const Color = @import("cli.zig").Color;
 const DisplayManager = @import("displayManager.zig").DisplayManager;
+const Logger = @import("logger.zig").Logger;
 
 const stdout_file = std.io.getStdOut().writer();
 const stdin = std.io.getStdIn().reader();
 var bw = std.io.bufferedWriter(stdout_file);
 const stdout = bw.writer();
 
-const UciEngine = struct {
+pub const UciEngine = struct {
     name: []const u8,
     process: std.process.Child,
-    stdout_reader: std.fs.File.Reader,
-    stdin_writer: std.fs.File.Writer,
+    stdoutReader: std.fs.File.Reader,
+    stdinWriter: std.fs.File.Writer,
     color: []const u8,
 
-    pub fn init(engine: Engine, allocator: std.mem.Allocator, color: []const u8) !UciEngine {
+    pub fn init(engine: Engine, arena: *std.heap.ArenaAllocator, color: []const u8) !UciEngine {
         var process = std.process.Child.init(
             &[_][]const u8{engine.path},
-            allocator,
+            arena.allocator(),
         );
         process.stdin_behavior = .Pipe;
         process.stdout_behavior = .Pipe;
@@ -28,10 +29,10 @@ const UciEngine = struct {
         try process.spawn();
 
         return UciEngine{
-            .name = engine.name,
+            .name = try arena.allocator().dupe(u8, engine.name),
             .process = process,
-            .stdout_reader = process.stdout.?.reader(),
-            .stdin_writer = process.stdin.?.writer(),
+            .stdoutReader = process.stdout.?.reader(),
+            .stdinWriter = process.stdin.?.writer(),
             .color = color,
         };
     }
@@ -40,188 +41,184 @@ const UciEngine = struct {
         _ = self.process.kill() catch {};
     }
 
-    pub fn sendCommand(self: *UciEngine, command: []const u8) !void {
-        try self.stdin_writer.print("{s}\n", .{command});
+    pub fn sendCommand(self: *UciEngine, logger: *Logger, command: []const u8) !void {
+        try logger.log(self.name, true, command);
+        try self.stdinWriter.print("{s}\n", .{command});
     }
 
-    pub fn readResponse(self: *UciEngine, buffer: []u8) !?[]const u8 {
-        return try self.stdout_reader.readUntilDelimiterOrEof(buffer, '\n');
+    pub fn readResponse(self: *UciEngine, logger: *Logger, buffer: []u8) !?[]const u8 {
+        if (try self.stdoutReader.readUntilDelimiterOrEof(buffer, '\n')) |response| {
+            try logger.log(self.name, false, response);
+            return response;
+        }
+        return null;
     }
 
-    pub fn initialize(self: *UciEngine) !void {
+    pub fn initialize(self: *UciEngine, logger: *Logger) !void {
         var buffer: [4096]u8 = undefined;
 
-        try self.sendCommand("uci");
-        while (try self.readResponse(&buffer)) |response| {
+        try self.sendCommand(logger, "uci");
+        while (try self.readResponse(logger, &buffer)) |response| {
             if (std.mem.eql(u8, response, "uciok")) break;
         }
 
-        try self.sendCommand("isready");
-        while (try self.readResponse(&buffer)) |response| {
+        try self.sendCommand(logger, "isready");
+        while (try self.readResponse(logger, &buffer)) |response| {
             if (std.mem.eql(u8, response, "readyok")) break;
         }
 
-        try self.sendCommand("setoption name Hash value 128");
-        try self.sendCommand("setoption name MultiPV value 1");
-        try self.sendCommand("ucinewgame");
+        try self.sendCommand(logger, "setoption name Hash value 128");
+        try self.sendCommand(logger, "setoption name MultiPV value 1");
+        try self.sendCommand(logger, "ucinewgame");
     }
-};
-
-const PositionHistory = struct {
-    moves_string: []const u8,
-    count: usize = 1,
 };
 
 const MatchPreset = struct {
     name: []const u8,
     description: []const u8,
-    move_time_ms: u32,
-    game_count: u32 = 1,
+    moveTimeMS: u32,
+    gameCount: u32 = 1,
 };
 
 pub const MATCH_PRESETS = [_]MatchPreset{
     .{
         .name = "Blitz",
         .description = "Quick games with 1 second per move",
-        .move_time_ms = 1000,
+        .moveTimeMS = 1000,
     },
     .{
         .name = "Rapid",
         .description = "Medium-paced games with 5 seconds per move",
-        .move_time_ms = 5000,
+        .moveTimeMS = 5000,
     },
     .{
         .name = "Classical",
         .description = "Slow games with 15 seconds per move for deep analysis",
-        .move_time_ms = 15000,
+        .moveTimeMS = 15000,
     },
     .{
         .name = "Tournament",
         .description = "Best of 3 rapid games",
-        .move_time_ms = 5000,
-        .game_count = 3,
+        .moveTimeMS = 5000,
+        .gameCount = 3,
     },
 };
 
 pub const MatchManager = struct {
     white: UciEngine,
     black: UciEngine,
-    allocator: std.mem.Allocator,
-    move_time_ms: u32,
-    game_count: u32,
+    arena: std.heap.ArenaAllocator,
+    logger: Logger,
+    moveTimeMS: u32,
+    gameCount: u32,
     colors: Color,
     move_count: usize = 0,
-    position_history: std.StringHashMap(PositionHistory),
 
-    pub fn init(white_engine: Engine, black_engine: Engine, allocator: std.mem.Allocator, preset: MatchPreset) !MatchManager {
+    pub fn init(whiteEngine: Engine, blackEngine: Engine, allocator: std.mem.Allocator, preset: MatchPreset) !MatchManager {
         const colors = Color{};
-        return MatchManager{
-            .white = try UciEngine.init(white_engine, allocator, colors.blue),
-            .black = try UciEngine.init(black_engine, allocator, colors.magenta),
-            .allocator = allocator,
-            .move_time_ms = preset.move_time_ms,
-            .game_count = preset.game_count,
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        var logger = try Logger.init(allocator);
+        errdefer logger.deinit();
+
+        const white = try UciEngine.init(whiteEngine, &arena, colors.blue);
+        const black = try UciEngine.init(blackEngine, &arena, colors.magenta);
+
+        var manager = MatchManager{
+            .white = white,
+            .black = black,
+            .arena = arena,
+            .logger = logger,
+            .moveTimeMS = preset.moveTimeMS,
+            .gameCount = preset.gameCount,
             .colors = colors,
-            .position_history = std.StringHashMap(PositionHistory).init(allocator),
         };
+
+        try manager.logger.start(manager.white.name, manager.black.name);
+        return manager;
     }
 
     pub fn deinit(self: *MatchManager) void {
-        var it = self.position_history.iterator();
-        while (it.next()) |entry| {
-            self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.moves_string);
-        }
-        self.position_history.deinit();
         self.white.deinit();
         self.black.deinit();
+        self.logger.deinit();
+        self.arena.deinit();
     }
+
     const MatchResult = enum {
-        white_win,
-        black_win,
+        whiteWin,
+        blackWin,
         draw,
     };
-
     pub fn playMatch(self: *MatchManager) !MatchResult {
-        var display = try DisplayManager.init(self.allocator);
+        var display = try DisplayManager.init(self.arena.allocator());
         defer display.deinit();
 
         try display.initializeBoard();
+        try self.white.initialize(&self.logger);
+        try self.black.initialize(&self.logger);
 
-        try self.white.initialize();
-        try self.black.initialize();
-
-        const current_position = "startpos";
-        var moves = std.ArrayList([]const u8).init(self.allocator);
+        var moves = std.ArrayList([]const u8).init(self.arena.allocator());
         defer moves.deinit();
 
-        var current_player = &self.white;
-        var is_game_over = false;
+        var currentPlayer = &self.white;
+        var isGameOver = false;
         var winner: ?*UciEngine = null;
-        var draw_reason: ?[]const u8 = null;
+        var drawReason: ?[]const u8 = null;
+        var repetitionCount = std.StringHashMap(usize).init(self.arena.allocator());
+        defer repetitionCount.deinit();
 
-        while (!is_game_over) {
+        while (!isGameOver) {
             self.move_count += 1;
-            const moves_str = try formatMovesList(self.allocator, &moves);
-            defer self.allocator.free(moves_str);
+            const position_cmd = try std.fmt.allocPrint(self.arena.allocator(), "position startpos moves {s}", .{try formatMovesList(self.arena.allocator(), &moves)});
 
-            // Check for threefold repetition
-            const moves_key = try self.allocator.dupe(u8, moves_str);
-            defer self.allocator.free(moves_key);
+            const go_cmd = try std.fmt.allocPrint(self.arena.allocator(), "go movetime {d}", .{self.moveTimeMS});
 
-            if (self.position_history.getPtr(moves_key)) |pos_history| {
-                pos_history.count += 1;
-                if (pos_history.count >= 3) {
-                    is_game_over = true;
-                    draw_reason = "threefold repetition";
-                    break;
-                }
-            } else {
-                try self.position_history.put(try self.allocator.dupe(u8, moves_key), .{ .moves_string = try self.allocator.dupe(u8, moves_str) });
-            }
+            try currentPlayer.sendCommand(&self.logger, position_cmd);
+            try currentPlayer.sendCommand(&self.logger, go_cmd);
 
-            const position_cmd = try std.fmt.allocPrint(self.allocator, "position {s} moves {s}", .{ current_position, moves_str });
-            defer self.allocator.free(position_cmd);
-
-            try current_player.sendCommand(position_cmd);
-            try current_player.sendCommand(try std.fmt.allocPrint(self.allocator, "go movetime {d}", .{self.move_time_ms}));
-
-            var move: ?[]const u8 = null;
             var buffer: [4096]u8 = undefined;
+            var move: ?[]const u8 = null;
 
-            while (try current_player.readResponse(&buffer)) |response| {
+            while (try currentPlayer.readResponse(&self.logger, &buffer)) |response| {
                 if (std.mem.startsWith(u8, response, "bestmove")) {
-                    move = try self.allocator.dupe(u8, response[9..13]);
+                    move = try self.arena.allocator().dupe(u8, response[9..13]);
                     break;
                 }
             }
 
             if (move) |m| {
                 try moves.append(m);
-                try display.updateMove(m, current_player.name, self.move_count);
+                try display.updateMove(m, currentPlayer.name, self.move_count);
 
                 if (isCheckmate(m)) {
-                    winner = current_player;
-                    is_game_over = true;
+                    winner = currentPlayer;
+                    isGameOver = true;
                 } else if (isStalemate(m)) {
-                    is_game_over = true;
-                    draw_reason = "stalemate";
+                    isGameOver = true;
+                    drawReason = "stalemate";
                 }
 
-                current_player = if (current_player == &self.white) &self.black else &self.white;
+                const position = try formatMovesList(self.arena.allocator(), &moves);
+                const count = (repetitionCount.get(position) orelse 0) + 1;
+                try repetitionCount.put(position, count);
+
+                if (count >= 3) {
+                    isGameOver = true;
+                    drawReason = "threefold repetition";
+                }
+
+                currentPlayer = if (currentPlayer == &self.white) &self.black else &self.white;
             } else {
-                is_game_over = true;
+                isGameOver = true;
             }
 
             if (moves.items.len >= 100) {
-                is_game_over = true;
-                draw_reason = "move limit";
+                isGameOver = true;
+                drawReason = "move limit";
             }
         }
 
-        // Move cursor to bottom of display before showing game over message
-        try stdout.print("\x1b[{d};0H\n", .{display.board_start_line + 12});
-
+        try stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
         const c = self.colors;
         try stdout.print("\n{s}Game Over!{s} ", .{ c.bold, c.reset });
 
@@ -229,13 +226,14 @@ pub const MatchManager = struct {
 
         if (winner) |w| {
             try stdout.print("{s}{s}{s} wins by checkmate!\n", .{ w.color, w.name, c.reset });
-            result = if (w == &self.white) .white_win else .black_win;
-        } else if (draw_reason) |reason| {
+            result = if (w == &self.white) .whiteWin else .blackWin;
+        } else if (drawReason) |reason| {
             try stdout.print("{s}Draw by {s}!{s}\n", .{ c.yellow, reason, c.reset });
         } else {
             try stdout.print("{s}Draw!{s}\n", .{ c.yellow, c.reset });
         }
 
+        try bw.flush();
         return result;
     }
 };
@@ -259,7 +257,7 @@ fn formatMovesList(allocator: std.mem.Allocator, moves: *const std.ArrayList([]c
         pos += move.len + 1;
     }
 
-    return result;
+    return result[0..pos -| 1];
 }
 
 fn isCheckmate(move: []const u8) bool {

@@ -14,10 +14,11 @@
 //!
 //! ## Usage
 //! ```zig
-//! zduel --help  // Get help
-//! zduel --engines // Manage engines
-//! zduel --docs // Open the docs
-//! zduel --engines // Manage engines
+//! ./zduel --help  // Get help
+//! ./zduel --engines // Manage engines
+//! ./zduel --docs // Open the docs
+//! ./zduel --engines // Manage engines
+//! ./zduel --match
 //! ```
 //!
 //! ## Project Status

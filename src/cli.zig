@@ -34,12 +34,12 @@ const Command = struct {
 
 pub const CLI = struct {
     allocator: std.mem.Allocator,
-    engine_manager: *enginePlay.EngineManager,
+    engineManager: *enginePlay.EngineManager,
 
-    pub fn init(allocator: std.mem.Allocator, engine_manager: *enginePlay.EngineManager) CLI {
+    pub fn init(allocator: std.mem.Allocator, engineManager: *enginePlay.EngineManager) CLI {
         return .{
             .allocator = allocator,
-            .engine_manager = engine_manager,
+            .engineManager = engineManager,
         };
     }
 
@@ -102,8 +102,8 @@ pub const CLI = struct {
             try stdout.print("> ", .{});
             try bw.flush();
 
-            if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |user_input| {
-                const trimmed = std.mem.trim(u8, user_input, &std.ascii.whitespace);
+            if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |userInput| {
+                const trimmed = std.mem.trim(u8, userInput, &std.ascii.whitespace);
                 if (trimmed.len == 0) continue;
 
                 if (std.mem.eql(u8, trimmed, "quit")) break;
@@ -132,13 +132,13 @@ fn handleEngines(allocator: std.mem.Allocator) !void {
 fn showHelp(allocator: std.mem.Allocator) !void {
     _ = allocator; // Unused but required for consistent handler signature
     const colors = Color{};
-    const doc_url = "https://example.com/docs";
+    const docUrl = "https://example.com/docs";
 
     try printHeader();
 
     // Print documentation link
     try stdout.print("📚 {s}Documentation{s} ", .{ colors.green, colors.reset });
-    try stdout.print("\x1b]8;;{s}\x1b\\{s}{s}{s}\x1b]8;;\x1b\\\n\n", .{ doc_url, colors.green, colors.underline, colors.reset });
+    try stdout.print("\x1b]8;;{s}\x1b\\{s}{s}{s}\x1b]8;;\x1b\\\n\n", .{ docUrl, colors.green, colors.underline, colors.reset });
 
     // Print available commands
     try stdout.print("{s}Available Commands:{s}\n", .{ colors.green, colors.reset });
@@ -190,8 +190,8 @@ pub fn runInteractiveMode(allocator: std.mem.Allocator) !void {
         try stdout.print("> ", .{});
         try bw.flush();
 
-        if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |user_input| {
-            const trimmed = std.mem.trim(u8, user_input, &std.ascii.whitespace);
+        if (try stdin.readUntilDelimiterOrEof(buf[0..], '\n')) |userInput| {
+            const trimmed = std.mem.trim(u8, userInput, &std.ascii.whitespace);
             if (trimmed.len == 0) continue;
 
             if (std.mem.eql(u8, trimmed, "quit")) break;
@@ -217,13 +217,13 @@ fn handleMatch(allocator: std.mem.Allocator) !void {
     // Select engines
     try stdout.print("\nSelect {s}WHITE{s} engine (1-{d}): ", .{ colors.blue, colors.reset, manager.engines.items.len });
     try bw.flush();
-    const white_idx = (try getUserInput()) - 1;
+    const whiteIndex = (try getUserInput()) - 1;
 
     try stdout.print("Select {s}BLACK{s} engine (1-{d}): ", .{ colors.magenta, colors.reset, manager.engines.items.len });
     try bw.flush();
-    const black_idx = (try getUserInput()) - 1;
+    const blackIndex = (try getUserInput()) - 1;
 
-    if (white_idx >= manager.engines.items.len or black_idx >= manager.engines.items.len) {
+    if (whiteIndex >= manager.engines.items.len or blackIndex >= manager.engines.items.len) {
         try stdout.print("{s}Invalid engine selection{s}\n", .{ colors.red, colors.reset });
         return;
     }
@@ -246,11 +246,11 @@ fn handleMatch(allocator: std.mem.Allocator) !void {
             preset.description,
             colors.reset,
         });
-        if (preset.game_count > 1) {
+        if (preset.gameCount > 1) {
             try stdout.print("   {s}Games:{s} {d}\n", .{
                 colors.dim,
                 colors.reset,
-                preset.game_count,
+                preset.gameCount,
             });
         }
     }
@@ -272,62 +272,64 @@ fn handleMatch(allocator: std.mem.Allocator) !void {
         colors.reset,
     });
 
+    try bw.flush();
+
     var match = try engineMatch.MatchManager.init(
-        manager.engines.items[white_idx],
-        manager.engines.items[black_idx],
+        manager.engines.items[whiteIndex],
+        manager.engines.items[blackIndex],
         allocator,
         preset,
     );
     defer match.deinit();
 
-    var white_wins: u32 = 0;
-    var black_wins: u32 = 0;
+    var whiteWins: u32 = 0;
+    var blackWins: u32 = 0;
     var draws: u32 = 0;
 
-    var game_number: u32 = 1;
-    while (game_number <= preset.game_count) : (game_number += 1) {
-        if (preset.game_count > 1) {
+    var gameNumber: u32 = 1;
+    while (gameNumber <= preset.gameCount) : (gameNumber += 1) {
+        if (preset.gameCount > 1) {
             try stdout.print("\n{s}Game {d} of {d}{s}\n", .{
                 colors.bold,
-                game_number,
-                preset.game_count,
+                gameNumber,
+                preset.gameCount,
                 colors.reset,
             });
         }
 
         const result = try match.playMatch();
         switch (result) {
-            .white_win => white_wins += 1,
-            .black_win => black_wins += 1,
+            .whiteWin => whiteWins += 1,
+            .blackWin => blackWins += 1,
             .draw => draws += 1,
         }
     }
 
-    if (preset.game_count > 1) {
+    if (preset.gameCount > 1) {
         try stdout.print("\n{s}Match Results:{s}\n", .{ colors.bold, colors.reset });
         try stdout.print("═════════════\n", .{});
         try stdout.print("{s}{s}:{s} {d} wins\n", .{
             colors.blue,
             match.white.name,
             colors.reset,
-            white_wins,
+            whiteWins,
         });
         try stdout.print("{s}{s}:{s} {d} wins\n", .{
-            colors.magenta,
+            colors.red,
             match.black.name,
             colors.reset,
-            black_wins,
+            blackWins,
         });
         try stdout.print("Draws: {d}\n", .{draws});
 
-        const match_winner = if (white_wins > black_wins)
+        const matchWinner = if (whiteWins > blackWins)
             match.white
-        else if (black_wins > white_wins)
+        else if (blackWins > whiteWins)
             match.black
         else
             null;
 
-        if (match_winner) |winner| {
+        if (matchWinner) |winner| {
             try stdout.print("\n{s}{s}{s} wins the match!\n", .{
                 winner.color,
                 winner.name,
@@ -341,8 +343,8 @@ fn handleMatch(allocator: std.mem.Allocator) !void {
 
 fn getUserInput() !usize {
     var buf: [100]u8 = undefined;
-    if (try stdin.readUntilDelimiterOrEof(&buf, '\n')) |user_input| {
-        return try std.fmt.parseInt(usize, std.mem.trim(u8, user_input, &std.ascii.whitespace), 10);
+    if (try stdin.readUntilDelimiterOrEof(&buf, '\n')) |userInput| {
+        return try std.fmt.parseInt(usize, std.mem.trim(u8, userInput, &std.ascii.whitespace), 10);
     }
     return error.InvalidInput;
 }
