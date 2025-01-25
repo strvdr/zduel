@@ -28,7 +28,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 // ANSI color codes
-const Color = struct {
+pub const Color = struct {
     yellow: []const u8 = "\x1b[33m",
     green: []const u8 = "\x1b[32m",
     red: []const u8 = "\x1b[31m",

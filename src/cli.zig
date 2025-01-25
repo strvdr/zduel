@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const enginePlay = @import("enginePlay.zig");
+const engineMatch = @import("engineMatch.zig");
 
 // stdout/stdin init
 const stdout_file = std.io.getStdOut().writer();
@@ -59,6 +60,13 @@ pub const CLI = struct {
             .usage = "zduel engines [list|add|remove]",
             .category = "Engine Management",
             .handler = handleEngines,
+        },
+        .{
+            .name = "match",
+            .description = "Start a match between two chess engines",
+            .usage = "zduel match",
+            .category = "Game Play",
+            .handler = handleMatch,
         },
     };
 
@@ -186,4 +194,44 @@ pub fn runInteractiveMode(allocator: std.mem.Allocator) !void {
             try CLI.handleCommand(allocator, trimmed);
         } else break;
     }
+}
+
+fn handleMatch(allocator: std.mem.Allocator) !void {
+    var manager = try enginePlay.EngineManager.init(allocator);
+    defer manager.deinit();
+    try manager.scanEngines();
+
+    if (manager.engines.items.len < 2) {
+        try stdout.print("Need at least 2 engines for a match\n", .{});
+        return;
+    }
+
+    try manager.listEngines();
+
+    // Select engines
+    try stdout.print("\nSelect WHITE engine (1-{d}): ", .{manager.engines.items.len});
+    try bw.flush();
+    const white_idx = (try getUserInput()) - 1;
+
+    try stdout.print("Select BLACK engine (1-{d}): ", .{manager.engines.items.len});
+    try bw.flush();
+    const black_idx = (try getUserInput()) - 1;
+
+    if (white_idx >= manager.engines.items.len or black_idx >= manager.engines.items.len) {
+        try stdout.print("Invalid engine selection\n", .{});
+        return;
+    }
+
+    var match = try engineMatch.MatchManager.init(manager.engines.items[white_idx], manager.engines.items[black_idx], allocator);
+    defer match.deinit();
+
+    try match.playMatch();
+}
+
+fn getUserInput() !usize {
+    var buf: [100]u8 = undefined;
+    if (try stdin.readUntilDelimiterOrEof(&buf, '\n')) |user_input| {
+        return try std.fmt.parseInt(usize, std.mem.trim(u8, user_input, &std.ascii.whitespace), 10);
+    }
+    return error.InvalidInput;
 }
