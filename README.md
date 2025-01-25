@@ -25,13 +25,15 @@ cd zduel
 zig build
 ```
 
-The executable will be available at `zig-out/bin/zduel`
+The executable will be available at `zig-out/bin/zduel`.
 
 ## Usage
 
 ### Interactive Mode
+
+Execute the following command from the project root. If you fail to run zduel from the root of the project, it won't be able to find engines in the "engines" folder. 
 ```bash
-./zduel
+./zig-out/bin/zduel
 ```
 ### Engine Setup
 1. Create an `engines` directory in your zduel folder
