@@ -69,6 +69,12 @@ zduel/
 
 ```
 
+## Images
+![image](https://github.com/user-attachments/assets/826def9e-38d2-4086-af99-655d060bc9c1)
+
+
+![image](https://github.com/user-attachments/assets/81b80a3d-0aa3-4403-8cf5-1d8496fa5eb7)
+
 ## Contributing
 
 1. Fork the repository
