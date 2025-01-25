@@ -10,11 +10,16 @@ var bw = std.io.bufferedWriter(stdout_file);
 const stdout = bw.writer();
 
 // ANSI color codes
-const Color = struct {
+pub const Color = struct {
     yellow: []const u8 = "\x1b[33m",
     green: []const u8 = "\x1b[32m",
     red: []const u8 = "\x1b[31m",
+    blue: []const u8 = "\x1b[34m",
+    magenta: []const u8 = "\x1b[35m",
+    cyan: []const u8 = "\x1b[36m",
+    bold: []const u8 = "\x1b[1m",
     reset: []const u8 = "\x1b[0m",
+    dim: []const u8 = "\x1b[2m",
     underline: []const u8 = "\x1b[4m",
 };
 
@@ -197,35 +202,141 @@ pub fn runInteractiveMode(allocator: std.mem.Allocator) !void {
 }
 
 fn handleMatch(allocator: std.mem.Allocator) !void {
+    const colors = Color{};
     var manager = try enginePlay.EngineManager.init(allocator);
     defer manager.deinit();
     try manager.scanEngines();
 
     if (manager.engines.items.len < 2) {
-        try stdout.print("Need at least 2 engines for a match\n", .{});
+        try stdout.print("{s}Need at least 2 engines for a match{s}\n", .{ colors.red, colors.reset });
         return;
     }
 
     try manager.listEngines();
 
     // Select engines
-    try stdout.print("\nSelect WHITE engine (1-{d}): ", .{manager.engines.items.len});
+    try stdout.print("\nSelect {s}WHITE{s} engine (1-{d}): ", .{ colors.blue, colors.reset, manager.engines.items.len });
     try bw.flush();
     const white_idx = (try getUserInput()) - 1;
 
-    try stdout.print("Select BLACK engine (1-{d}): ", .{manager.engines.items.len});
+    try stdout.print("Select {s}BLACK{s} engine (1-{d}): ", .{ colors.magenta, colors.reset, manager.engines.items.len });
     try bw.flush();
     const black_idx = (try getUserInput()) - 1;
 
     if (white_idx >= manager.engines.items.len or black_idx >= manager.engines.items.len) {
-        try stdout.print("Invalid engine selection\n", .{});
+        try stdout.print("{s}Invalid engine selection{s}\n", .{ colors.red, colors.reset });
         return;
     }
 
-    var match = try engineMatch.MatchManager.init(manager.engines.items[white_idx], manager.engines.items[black_idx], allocator);
+    // Display match presets
+    try stdout.print("\n{s}Available Match Types:{s}\n", .{ colors.green, colors.reset });
+    try stdout.print("══════════════════════\n", .{});
+
+    for (engineMatch.MATCH_PRESETS, 0..) |preset, i| {
+        try stdout.print("{s}[{d}]{s} {s}{s}{s}\n", .{
+            colors.cyan,
+            i + 1,
+            colors.reset,
+            colors.bold,
+            preset.name,
+            colors.reset,
+        });
+        try stdout.print("   {s}{s}{s}\n", .{
+            colors.dim,
+            preset.description,
+            colors.reset,
+        });
+        if (preset.game_count > 1) {
+            try stdout.print("   {s}Games:{s} {d}\n", .{
+                colors.dim,
+                colors.reset,
+                preset.game_count,
+            });
+        }
+    }
+
+    try stdout.print("\nSelect match type (1-{d}): ", .{engineMatch.MATCH_PRESETS.len});
+    try bw.flush();
+    const preset_idx = (try getUserInput()) - 1;
+
+    if (preset_idx >= engineMatch.MATCH_PRESETS.len) {
+        try stdout.print("{s}Invalid match type selection{s}\n", .{ colors.red, colors.reset });
+        return;
+    }
+
+    const preset = engineMatch.MATCH_PRESETS[preset_idx];
+    try stdout.print("\n{s}Starting {s}{s} match...{s}\n", .{
+        colors.bold,
+        colors.green,
+        preset.name,
+        colors.reset,
+    });
+
+    var match = try engineMatch.MatchManager.init(
+        manager.engines.items[white_idx],
+        manager.engines.items[black_idx],
+        allocator,
+        preset,
+    );
     defer match.deinit();
 
-    try match.playMatch();
+    var white_wins: u32 = 0;
+    var black_wins: u32 = 0;
+    var draws: u32 = 0;
+
+    var game_number: u32 = 1;
+    while (game_number <= preset.game_count) : (game_number += 1) {
+        if (preset.game_count > 1) {
+            try stdout.print("\n{s}Game {d} of {d}{s}\n", .{
+                colors.bold,
+                game_number,
+                preset.game_count,
+                colors.reset,
+            });
+        }
+
+        const result = try match.playMatch();
+        switch (result) {
+            .white_win => white_wins += 1,
+            .black_win => black_wins += 1,
+            .draw => draws += 1,
+        }
+    }
+
+    if (preset.game_count > 1) {
+        try stdout.print("\n{s}Match Results:{s}\n", .{ colors.bold, colors.reset });
+        try stdout.print("═════════════\n", .{});
+        try stdout.print("{s}{s}:{s} {d} wins\n", .{
+            colors.blue,
+            match.white.name,
+            colors.reset,
+            white_wins,
+        });
+        try stdout.print("{s}{s}:{s} {d} wins\n", .{
+            colors.magenta,
+            match.black.name,
+            colors.reset,
+            black_wins,
+        });
+        try stdout.print("Draws: {d}\n", .{draws});
+
+        const match_winner = if (white_wins > black_wins)
+            match.white
+        else if (black_wins > white_wins)
+            match.black
+        else
+            null;
+
+        if (match_winner) |winner| {
+            try stdout.print("\n{s}{s}{s} wins the match!\n", .{
+                winner.color,
+                winner.name,
+                colors.reset,
+            });
+        } else {
+            try stdout.print("\n{s}Match drawn!{s}\n", .{ colors.yellow, colors.reset });
+        }
+    }
 }
 
 fn getUserInput() !usize {

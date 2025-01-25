@@ -26,19 +26,7 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-
-// ANSI color codes
-pub const Color = struct {
-    yellow: []const u8 = "\x1b[33m",
-    green: []const u8 = "\x1b[32m",
-    red: []const u8 = "\x1b[31m",
-    blue: []const u8 = "\x1b[34m",
-    magenta: []const u8 = "\x1b[35m",
-    cyan: []const u8 = "\x1b[36m",
-    bold: []const u8 = "\x1b[1m",
-    reset: []const u8 = "\x1b[0m",
-    dim: []const u8 = "\x1b[2m",
-};
+const cli = @import("cli.zig");
 
 pub const Engine = struct {
     name: []const u8,
@@ -48,13 +36,13 @@ pub const Engine = struct {
 pub const EngineManager = struct {
     allocator: std.mem.Allocator,
     engines: std.ArrayList(Engine),
-    colors: Color,
+    colors: cli.Color,
 
     pub fn init(allocator: std.mem.Allocator) !EngineManager {
         return EngineManager{
             .allocator = allocator,
             .engines = std.ArrayList(Engine).init(allocator),
-            .colors = Color{},
+            .colors = cli.Color{},
         };
     }
 
