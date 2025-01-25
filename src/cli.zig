@@ -150,7 +150,7 @@ fn handleEngines(allocator: std.mem.Allocator) !void {
 fn showHelp(allocator: std.mem.Allocator) !void {
     _ = allocator; // Unused but required for consistent handler signature
     const colors = Color{};
-    const docUrl = "https://example.com/docs";
+    const docUrl = "https://zduel.strydr.net";
 
     try printHeader();
 
