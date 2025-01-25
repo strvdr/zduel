@@ -1,3 +1,21 @@
+//! Command-line interface for zduel.
+//!
+//! Handles user interaction, command parsing, and routing to appropriate
+//! functionality. Provides both interactive mode and direct command execution.
+//!
+//! ## Commands
+//! - docs: Open documentation
+//! - help: Show usage
+//! - engines: Manage engines
+//! - match: Start engine match
+//!
+//! ## Usage
+//! ```zig
+//! var cli = CLI.init(allocator, engineManager);
+//! try cli.runInteractiveMode(); // For interactive CLI
+//! try cli.handleCommand("help"); // For direct commands
+//! ```
+
 const std = @import("std");
 const builtin = @import("builtin");
 const enginePlay = @import("enginePlay.zig");

@@ -1,29 +1,35 @@
-//! zduel: A Command Line Chess Tool
+//! zduel: UCI Chess Engine Match Manager
 //!
-//! zduel is a command-line tool for playing and analyzing chess games.
-//! It provides a flexible interface for chess engine interaction and game analysis.
+//! Command-line tool for managing and running matches between UCI-compatible chess engines.
 //!
-//! ## Current Features
-//! - Engine management and execution
+//! ## Features
+//! - Engine vs engine matches with multiple time controls
+//! - Real-time board visualization
+//! - Match logging and analysis
+//! - Cross-platform support
 //!
-//! ## Planned Features
-//! - Support for multiple chess engines
-//! - Engine vs engine matches
-//! - Custom engine configuration
-//! - Tournament organization between multiple engines
+//! ## Match Types
+//! - Blitz (1s per move)
+//! - Rapid (5s per move)
+//! - Classical (15s per move)
+//! - Tournament (Best of 3 rapid games)
 //!
-//! ## Usage
+//! ## Commands
 //! ```zig
-//! ./zduel --help  // Get help
-//! ./zduel --engines // Manage engines
-//! ./zduel --docs // Open the docs
-//! ./zduel --engines // Manage engines
-//! ./zduel --match
+//! zduel          // Interactive mode
+//! zduel help     // Show commands
+//! zduel docs     // Open documentation
+//! zduel engines  // Manage engines
+//! zduel match    // Start engine match
 //! ```
 //!
+//! ## Engine Setup
+//! Place UCI-compatible engines in the `engines` directory.
+//! Use the `engines` command to manage them.
+//!
 //! ## Project Status
-//! zduel is under active development. Features and API may change
-//! as the project evolves.
+//! In active development. See documentation at
+//! https://zduel.strydr.net for latest updates.
 
 const std = @import("std");
 const cli = @import("cli.zig");

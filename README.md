@@ -1,72 +1,83 @@
-## zduel
+# zduel
 
 [![GPLv3 License](https://img.shields.io/badge/License-GPL%20v3-yellow.svg)](https://opensource.org/licenses/)
 
-A command-line chess tool for playing and analyzing chess games, with support for multiple engines and tournament organization.
+A command-line chess tool for managing engine matches and tournaments, with a focus on engine vs engine gameplay.
 
 ## Features
 
-### Current
-- Interactive command-line interface
+- Interactive CLI interface with color-coded output
+- Engine vs engine matches with multiple time controls
+- Real-time chess board visualization
+- Match logging and analysis
 - Cross-platform support (Windows, macOS, Linux)
-- Built-in documentation browser
-- Engine management system
-
-### Planned
-- Support for multiple chess engines
-- Engine vs engine matches
-- Custom engine configuration
-- Tournament organization between multiple engines
 
 ## Installation
 
+### Prerequisites
+- Zig 0.14.0 or later
+- Chess engines (UCI compatible)
+
+### Building from Source
 ```bash
-# Installation instructions coming soon
+git clone https://github.com/strvdr/zduel.git
+cd zduel
+zig build
 ```
+
+The executable will be available at `zig-out/bin/zduel`
 
 ## Usage
 
-Basic commands:
-
+### Interactive Mode
 ```bash
-zduel              # Start interactive mode
-zduel help         # Display help information
-zduel docs         # Open documentation in browser
-zduel engines      # Manage chess engines
+./zduel
 ```
 
-## Engine Management
+### Available Commands
+- `help` - Display commands and usage
+- `docs` - Open documentation in browser
+- `engines` - Manage chess engines
+- `match` - Start an engine vs engine match
 
-The `engines` command provides the following subcommands:
-- `list`: View installed engines
-- `add`: Add a new engine
-- `remove`: Remove an installed engine
+### Match Types
+- Blitz (1 second per move)
+- Rapid (5 seconds per move)  
+- Classical (15 seconds per move)
+- Tournament (Best of 3 rapid games)
 
-## Development
+### Engine Setup
+1. Create an `engines` directory in your zduel folder
+2. Place UCI-compatible chess engines in the directory
+3. Use `engines` command to manage them
 
-zduel is written in Zig and is under active development. The project structure is organized as follows:
-
+## Project Structure
 ```
 zduel/
 ├── src/
-│   ├── main.zig    # Entry point
-│   └── cli.zig     # CLI implementation
-```
+│   ├── main.zig       # Entry point
+│   ├── cli.zig        # CLI interface
+│   ├── enginePlay.wig # Engine management
+│   ├── engineMatch.zig # Match handling
+│   ├── displayManager.zig # Board visualization
+│   └── logger.zig     # Match logging
+├── docs/
+├── logs/
 
-### Building from Source
-
-```bash
-# Build instructions coming soon
 ```
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
 
 ## License
 
-[License information pending]
+This project is licensed under the GPLv3 License - see the LICENSE file for details.
 
 ## Documentation
 
-Full documentation is available at [https://zduel-docs.vercel.app/](https://zduel-docs.vercel.app/)
+Full documentation available at [https://zduel.strydr.net](https://zduel.strydr.net)

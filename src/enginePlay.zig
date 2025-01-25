@@ -1,29 +1,16 @@
-//! zduel: Engine Play Docs
+//! Chess engine management and execution.
 //!
-//! ## How to Use
-//! - build and run the executable from the project root
-//! ```zig
-//! zig build && ./zig-out/bin/zduel
-//! ```
-//!
-//! ## Planned Features
-//! - Support for multiple chess engines
-//! - Engine vs engine matches
-//! - Custom engine configuration
-//! - Tournament organization between multiple engines
+//! Provides:
+//! - Engine discovery
+//! - Process management
+//! - UCI protocol handling
 //!
 //! ## Usage
 //! ```zig
-//! zduel --help  // Get help
-//! zduel --engines // Manage engines
-//! zduel --docs // Open the docs
-//! zduel --engines // Manage engines
+//! var manager = try EngineManager.init(allocator);
+//! try manager.scanEngines();
+//! try manager.listEngines();
 //! ```
-//!
-//! ## Project Status
-//! zduel is under active development. Features and API may change
-//! as the project evolves.
-
 const std = @import("std");
 const builtin = @import("builtin");
 const cli = @import("cli.zig");
@@ -131,6 +118,11 @@ pub const EngineManager = struct {
             &[_][]const u8{engine.path},
             self.allocator,
         );
+
+        defer {
+            _ = child.kill() catch {};
+            _ = child.wait() catch {};
+        }
 
         try std.io.getStdOut().writer().print("{s}Starting process...{s}\n", .{ c.dim, c.reset });
         try child.spawn();

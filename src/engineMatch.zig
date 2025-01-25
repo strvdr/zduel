@@ -1,3 +1,23 @@
+//! Engine match management and gameplay coordination.
+//!
+//! Handles:
+//! - Match initialization
+//! - Move execution
+//! - Game state tracking
+//! - Result determination
+//!
+//! ## Match Types
+//! - Blitz (1s/move)
+//! - Rapid (5s/move)
+//! - Classical (15s/move)
+//! - Tournament (Bo3)
+//!
+//! ## Usage
+//! ```zig
+//! var match = try MatchManager.init(engine1, engine2, allocator, preset);
+//! const result = try match.playMatch();
+//! ```
+
 const std = @import("std");
 const enginePlay = @import("enginePlay.zig");
 const Engine = enginePlay.Engine;
@@ -138,6 +158,11 @@ pub const MatchManager = struct {
     }
 
     pub fn deinit(self: *MatchManager) void {
+
+        // Send quit command to engines
+        self.white.sendCommand(&self.logger, "quit") catch {};
+        self.black.sendCommand(&self.logger, "quit") catch {};
+
         self.white.deinit();
         self.black.deinit();
         self.logger.deinit();

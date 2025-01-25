@@ -1,3 +1,17 @@
+//! Match logging and analysis recording.
+//!
+//! Features:
+//! - Per-match log files
+//! - Engine communication logging
+//! - Game result recording
+//!
+//! ## Usage
+//! ```zig
+//! var logger = try Logger.init(allocator);
+//! try logger.start(whiteName, blackName);
+//! try logger.log(engineName, isInput, data);
+//! ```
+
 const std = @import("std");
 const cli = @import("cli.zig");
 const Color = cli.Color;

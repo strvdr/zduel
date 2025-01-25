@@ -18,6 +18,16 @@ pub fn build(b: *std.Build) void {
         .root_module = exe_mod,
     });
 
+    const docs = b.addInstallDirectory(.{
+        .source_dir = exe.getEmittedDocs(),
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    });
+
+    // Create docs step
+    const docs_step = b.step("docs", "Generate documentation");
+    docs_step.dependOn(&docs.step);
+
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).

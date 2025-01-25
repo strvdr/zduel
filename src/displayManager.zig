@@ -1,3 +1,19 @@
+//! Real-time chess board visualization and move display.
+//!
+//! Manages terminal-based rendering of:
+//! - Chess board with pieces
+//! - Move history
+//! - Game status
+//!
+//! Uses ANSI escape codes for colors and cursor control.
+//!
+//! ## Usage
+//! ```zig
+//! var display = try DisplayManager.init(allocator);
+//! try display.initializeBoard();
+//! try display.updateMove("e2e4", "Engine1", 1);
+//! ```
+
 const std = @import("std");
 const cli = @import("cli.zig");
 const Color = cli.Color;
