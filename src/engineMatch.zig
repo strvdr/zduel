@@ -586,10 +586,10 @@ const PositionMap = struct {
         // Get or update count
         const result = try self.map.getOrPut(positionStr);
         if (!result.found_existing) {
-            result.valuePtr.* = 0;
+            result.value_ptr.* = 0;
         }
-        result.valuePtr.* += 1;
-        return result.valuePtr.*;
+        result.value_ptr.* += 1;
+        return result.value_ptr.*;
     }
 
     fn deinit(self: *PositionMap) void {
