@@ -54,7 +54,7 @@ pub const DisplayManager = struct {
         color: PieceColor,
         kind: PieceKind,
 
-        fn toChar(self: Piece) u8 {
+        pub fn toChar(self: Piece) u8 {
             const chars = "pnbrqk";
             const index = @intFromEnum(self.kind);
             const c = chars[index];
@@ -121,6 +121,33 @@ pub const DisplayManager = struct {
                 square.* = null;
             }
         }
+    }
+
+    pub fn reset(self: *DisplayManager) !void {
+        // Clear the board
+        for (&self.board) |*rank| {
+            for (rank) |*square| {
+                if (square.*) |piece| {
+                    self.allocator.destroy(piece);
+                }
+                square.* = null;
+            }
+        }
+
+        // Reset the move count
+        self.currentMove = 0;
+
+        // Clear the move list area by moving cursor and clearing lines
+        try stdout.print("\x1b[s", .{}); // Save cursor position
+        var i: usize = 0;
+        while (i < 20) : (i += 1) {
+            try stdout.print("\x1b[{d};0H\x1b[K", .{self.moveListStartLine + i});
+        }
+        try stdout.print("\x1b[u", .{}); // Restore cursor position
+
+        // Reinitialize the board
+        try self.initializeBoard();
+        try bw.flush();
     }
 
     pub fn initializeBoard(self: *DisplayManager) !void {

@@ -47,69 +47,206 @@ const stdin = std.io.getStdIn().reader();
 var bw = std.io.bufferedWriter(stdout_file);
 const stdout = bw.writer();
 
+pub const UciEngineError = error{
+    ProcessStartFailed,
+    ProcessTerminated,
+    UciInitFailed,
+    InvalidExecutable,
+};
+
 pub const UciEngine = struct {
     name: []const u8,
     process: std.process.Child,
     stdoutReader: std.fs.File.Reader,
     stdinWriter: std.fs.File.Writer,
     color: []const u8,
+    isInitialized: bool = false,
 
     pub fn init(engine: Engine, arena: *std.heap.ArenaAllocator, color: []const u8) !UciEngine {
+        // First check if the file exists and is executable
+        const file = std.fs.openFileAbsolute(engine.path, .{}) catch |err| {
+            std.debug.print("Failed to open engine file: {s}\nPath: {s}\n", .{
+                @errorName(err),
+                engine.path,
+            });
+            return UciEngineError.InvalidExecutable;
+        };
+        file.close();
+
+        // Create process
         var process = std.process.Child.init(
             &[_][]const u8{engine.path},
             arena.allocator(),
         );
+
+        // Set up pipes
         process.stdin_behavior = .Pipe;
         process.stdout_behavior = .Pipe;
+        process.stderr_behavior = .Pipe;
 
-        try process.spawn();
+        // Try to spawn the process
+        process.spawn() catch |err| {
+            std.debug.print("Failed to spawn engine process: {s}\nPath: {s}\n", .{
+                @errorName(err),
+                engine.path,
+            });
+            return UciEngineError.ProcessStartFailed;
+        };
 
-        return UciEngine{
-            .name = try arena.allocator().dupe(u8, engine.name),
-            .process = process,
-            .stdoutReader = process.stdout.?.reader(),
-            .stdinWriter = process.stdin.?.writer(),
-            .color = color,
+        // Wait a short time to ensure process started successfully
+        std.time.sleep(100 * std.time.ns_per_ms);
+
+        // Check if process is still running
+        const term = process.term orelse {
+            // Use the engine name that was already allocated in the arena
+            return UciEngine{
+                .name = engine.name,
+                .process = process,
+                .stdoutReader = process.stdout.?.reader(),
+                .stdinWriter = process.stdin.?.writer(),
+                .color = color,
+                .isInitialized = false,
+            };
+        };
+
+        // If we get here, process terminated immediately
+        std.debug.print("Engine process terminated immediately with status: {any}\n", .{term});
+        return UciEngineError.ProcessTerminated;
+    }
+    pub fn deinit(self: *UciEngine) void {
+        // First try graceful shutdown with UCI quit command
+        if (self.isInitialized) {
+            // Send quit command and give engine time to process it
+            self.sendCommand(null, "quit") catch {};
+            std.time.sleep(100 * std.time.ns_per_ms);
+
+            // Check if process terminated naturally
+            if (self.process.term == null) {
+                // Process still running, try terminate signal
+                _ = self.process.kill() catch {};
+
+                // Give it a brief moment to terminate
+                std.time.sleep(50 * std.time.ns_per_ms);
+
+                // If still running, force kill
+                if (self.process.term == null) {
+                    _ = self.process.kill() catch {};
+                }
+            }
+        } else {
+            // If not initialized, just force kill
+            _ = self.process.kill() catch {};
+        }
+
+        // Clean up pipes in reverse order
+        if (self.process.stderr) |stderr| {
+            stderr.close();
+        }
+        if (self.process.stdout) |stdOut| {
+            stdOut.close();
+        }
+        if (self.process.stdin) |stdIn| {
+            stdIn.close();
+        }
+
+        // Wait with timeout for process to fully terminate
+        var timeout: usize = 0;
+        while (timeout < 10) : (timeout += 1) {
+            if (self.process.wait()) |_| {
+                break;
+            } else |_| {
+                std.time.sleep(10 * std.time.ns_per_ms);
+            }
+        }
+    }
+    pub fn sendCommand(self: *UciEngine, logger: ?*Logger, command: []const u8) !void {
+        // Check if process is still running
+        if (self.process.term) |term| {
+            std.debug.print("Engine process terminated with status: {any}\n", .{term});
+            return UciEngineError.ProcessTerminated;
+        }
+
+        if (logger) |l| {
+            try l.log(self.name, true, command);
+        }
+
+        self.stdinWriter.print("{s}\n", .{command}) catch |err| {
+            std.debug.print("Failed to send command to engine {s}: {s}\nCommand: {s}\n", .{
+                self.name,
+                @errorName(err),
+                command,
+            });
+            return err;
         };
     }
 
-    pub fn deinit(self: *UciEngine) void {
-        _ = self.process.kill() catch {};
-    }
-
-    pub fn sendCommand(self: *UciEngine, logger: *Logger, command: []const u8) !void {
-        try logger.log(self.name, true, command);
-        try self.stdinWriter.print("{s}\n", .{command});
-    }
-
     pub fn readResponse(self: *UciEngine, logger: *Logger, buffer: []u8) !?[]const u8 {
-        if (try self.stdoutReader.readUntilDelimiterOrEof(buffer, '\n')) |response| {
-            try logger.log(self.name, false, response);
-            return response;
+        // Check if process is still running
+        if (self.process.term) |term| {
+            std.debug.print("Engine process terminated with status: {any}\n", .{term});
+            return UciEngineError.ProcessTerminated;
         }
+
+        const response = self.stdoutReader.readUntilDelimiterOrEof(buffer, '\n') catch |err| {
+            std.debug.print("Error reading from engine {s}: {s}\n", .{
+                self.name,
+                @errorName(err),
+            });
+            return err;
+        };
+
+        if (response) |line| {
+            try logger.log(self.name, false, line);
+            return line;
+        }
+
         return null;
     }
 
     pub fn initialize(self: *UciEngine, logger: *Logger) !void {
         var buffer: [4096]u8 = undefined;
 
+        // Send UCI command and wait for uciok
         try self.sendCommand(logger, "uci");
-        while (try self.readResponse(logger, &buffer)) |response| {
-            if (std.mem.eql(u8, response, "uciok")) break;
+        var got_uciok = false;
+        var timeout: usize = 0;
+        while (!got_uciok and timeout < 100) : (timeout += 1) {
+            if (try self.readResponse(logger, &buffer)) |response| {
+                if (std.mem.eql(u8, response, "uciok")) {
+                    got_uciok = true;
+                }
+            }
+            if (!got_uciok) {
+                std.time.sleep(10 * std.time.ns_per_ms);
+            }
         }
+        if (!got_uciok) return UciEngineError.UciInitFailed;
 
+        // Send isready and wait for readyok
         try self.sendCommand(logger, "isready");
-        while (try self.readResponse(logger, &buffer)) |response| {
-            if (std.mem.eql(u8, response, "readyok")) break;
+        var got_readyok = false;
+        timeout = 0;
+        while (!got_readyok and timeout < 100) : (timeout += 1) {
+            if (try self.readResponse(logger, &buffer)) |response| {
+                if (std.mem.eql(u8, response, "readyok")) {
+                    got_readyok = true;
+                }
+            }
+            if (!got_readyok) {
+                std.time.sleep(10 * std.time.ns_per_ms);
+            }
         }
+        if (!got_readyok) return UciEngineError.UciInitFailed;
 
         try self.sendCommand(logger, "setoption name Hash value 128");
         try self.sendCommand(logger, "setoption name MultiPV value 1");
         try self.sendCommand(logger, "ucinewgame");
+
+        self.isInitialized = true;
     }
 };
 
-const MatchPreset = struct {
+pub const MatchPreset = struct {
     name: []const u8,
     description: []const u8,
     moveTimeMS: u32,
@@ -153,11 +290,24 @@ pub const MatchManager = struct {
     pub fn init(whiteEngine: Engine, blackEngine: Engine, allocator: std.mem.Allocator, preset: MatchPreset) !MatchManager {
         const colors = Color{};
         var arena = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
+
         var logger = try Logger.init(allocator);
         errdefer logger.deinit();
 
-        const white = try UciEngine.init(whiteEngine, &arena, colors.blue);
-        const black = try UciEngine.init(blackEngine, &arena, colors.magenta);
+        // First duplicate the engine names into our arena
+        const whiteName = try arena.allocator().dupe(u8, whiteEngine.name);
+        const blackName = try arena.allocator().dupe(u8, blackEngine.name);
+        const whitePath = try arena.allocator().dupe(u8, whiteEngine.path);
+        const blackPath = try arena.allocator().dupe(u8, blackEngine.path);
+
+        // Create engine structs with our arena-allocated strings
+        const whiteEngineArena = Engine{ .name = whiteName, .path = whitePath };
+        const blackEngineArena = Engine{ .name = blackName, .path = blackPath };
+
+        // Now initialize the UCI engines
+        const white = try UciEngine.init(whiteEngineArena, &arena, colors.blue);
+        const black = try UciEngine.init(blackEngineArena, &arena, colors.magenta);
 
         var manager = MatchManager{
             .white = white,
@@ -167,6 +317,7 @@ pub const MatchManager = struct {
             .moveTimeMS = preset.moveTimeMS,
             .gameCount = preset.gameCount,
             .colors = colors,
+            .move_count = 0,
         };
 
         try manager.logger.start(manager.white.name, manager.black.name);
@@ -190,60 +341,125 @@ pub const MatchManager = struct {
         blackWin,
         draw,
     };
+
+    fn getPositionKey(self: *MatchManager, display: *DisplayManager) ![]const u8 {
+        var key = std.ArrayList(u8).init(self.arena.allocator());
+        errdefer key.deinit();
+
+        // Create a string representation of the current board state
+        for (display.board) |rank| {
+            for (rank) |square| {
+                if (square) |piece| {
+                    try key.append(piece.toChar());
+                } else {
+                    try key.append('-');
+                }
+            }
+        }
+        return key.toOwnedSlice();
+    }
+
     pub fn playMatch(self: *MatchManager) !MatchResult {
         var display = try DisplayManager.init(self.arena.allocator());
         defer display.deinit();
 
         try display.initializeBoard();
-        try self.white.initialize(&self.logger);
-        try self.black.initialize(&self.logger);
+
+        self.move_count = 0;
+
+        // Initialize both engines if not already done
+        if (!self.white.isInitialized) try self.white.initialize(&self.logger);
+        if (!self.black.isInitialized) try self.black.initialize(&self.logger);
 
         var moves = std.ArrayList([]const u8).init(self.arena.allocator());
         defer moves.deinit();
 
+        // Reset position for both engines
+        try self.white.sendCommand(&self.logger, "position startpos");
+        try self.black.sendCommand(&self.logger, "position startpos");
+        try self.white.sendCommand(&self.logger, "isready");
+        try self.black.sendCommand(&self.logger, "isready");
+        // Wait for readyok from both engines
+        var buf: [4096]u8 = undefined;
+        var white_ready = false;
+        var black_ready = false;
+
+        while (!white_ready or !black_ready) {
+            if (!white_ready) {
+                if (try self.white.readResponse(&self.logger, &buf)) |response| {
+                    if (std.mem.eql(u8, response, "readyok")) white_ready = true;
+                }
+            }
+            if (!black_ready) {
+                if (try self.black.readResponse(&self.logger, &buf)) |response| {
+                    if (std.mem.eql(u8, response, "readyok")) black_ready = true;
+                }
+            }
+        }
         var currentPlayer = &self.white;
         var isGameOver = false;
         var winner: ?*UciEngine = null;
         var drawReason: ?[]const u8 = null;
-        var repetitionCount = std.StringHashMap(usize).init(self.arena.allocator());
-        defer repetitionCount.deinit();
+        var positions = PositionMap.init(&self.arena);
+        defer positions.deinit();
 
         while (!isGameOver) {
             self.move_count += 1;
-            const position_cmd = try std.fmt.allocPrint(self.arena.allocator(), "position startpos moves {s}", .{try formatMovesList(self.arena.allocator(), &moves)});
+            const posCommand = try std.fmt.allocPrint(self.arena.allocator(), "position startpos moves {s}", .{try formatMovesList(self.arena.allocator(), &moves)});
 
-            const go_cmd = try std.fmt.allocPrint(self.arena.allocator(), "go movetime {d}", .{self.moveTimeMS});
+            const goCommand = try std.fmt.allocPrint(self.arena.allocator(), "go movetime {d}", .{self.moveTimeMS});
 
-            try currentPlayer.sendCommand(&self.logger, position_cmd);
-            try currentPlayer.sendCommand(&self.logger, go_cmd);
+            try currentPlayer.sendCommand(&self.logger, posCommand);
+            try currentPlayer.sendCommand(&self.logger, goCommand);
 
             var buffer: [4096]u8 = undefined;
             var move: ?[]const u8 = null;
 
             while (try currentPlayer.readResponse(&self.logger, &buffer)) |response| {
                 if (std.mem.startsWith(u8, response, "bestmove")) {
+                    if (isStockfishForfeit(response)) {
+                        // Handle Stockfish forfeit/mate
+                        isGameOver = true;
+                        winner = if (currentPlayer == &self.white) &self.black else &self.white;
+                        try stdout.print("\n{s}{s} acknowledges defeat!{s}\n", .{
+                            currentPlayer.color,
+                            currentPlayer.name,
+                            self.colors.reset,
+                        });
+                        break;
+                    }
                     move = try self.arena.allocator().dupe(u8, response[9..13]);
                     break;
                 }
             }
 
+            // Check for resignation
             if (move) |m| {
-                try moves.append(m);
-                try display.updateMove(m, currentPlayer.name, self.move_count);
+                // Check for resignation
+                if (std.mem.eql(u8, m, "0000")) {
+                    isGameOver = true;
+                    winner = if (currentPlayer == &self.white) &self.black else &self.white;
+                    try stdout.print("\n{s}{s} resigns!{s}\n", .{
+                        currentPlayer.color,
+                        currentPlayer.name,
+                        self.colors.reset,
+                    });
+                } else {
+                    try moves.append(m);
+                    try display.updateMove(m, currentPlayer.name, self.move_count);
 
-                if (isCheckmate(m)) {
-                    winner = currentPlayer;
-                    isGameOver = true;
-                } else if (isStalemate(m)) {
-                    isGameOver = true;
-                    drawReason = "stalemate";
+                    if (isCheckmate(m)) {
+                        winner = currentPlayer;
+                        isGameOver = true;
+                    } else if (isStalemate(m)) {
+                        isGameOver = true;
+                        drawReason = "stalemate";
+                    }
                 }
 
-                const position = try formatMovesList(self.arena.allocator(), &moves);
-                const count = (repetitionCount.get(position) orelse 0) + 1;
-                try repetitionCount.put(position, count);
-
-                if (count >= 3) {
+                // Check for three-fold repetition
+                const repetitions = try positions.recordPosition(&display);
+                if (repetitions >= 3) {
                     isGameOver = true;
                     drawReason = "threefold repetition";
                 }
@@ -258,7 +474,6 @@ pub const MatchManager = struct {
                 drawReason = "move limit";
             }
         }
-
         try stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
         const c = self.colors;
         try stdout.print("\n{s}Game Over!{s} ", .{ c.bold, c.reset });
@@ -307,4 +522,85 @@ fn isCheckmate(move: []const u8) bool {
 
 fn isStalemate(move: []const u8) bool {
     return std.mem.endsWith(u8, move, "=");
+}
+
+pub fn displayMatchPresets() !void {
+    const c = Color{};
+    try stdout.print("\n{s}Available Match Types:{s}\n", .{ c.green, c.reset });
+    try stdout.print("══════════════════════\n", .{});
+
+    for (MATCH_PRESETS, 0..) |preset, i| {
+        try stdout.print("{s}[{d}]{s} {s}{s}{s}\n", .{
+            c.cyan,
+            i + 1,
+            c.reset,
+            c.bold,
+            preset.name,
+            c.reset,
+        });
+        try stdout.print("   {s}{s}{s}\n", .{
+            c.dim,
+            preset.description,
+            c.reset,
+        });
+        if (preset.gameCount > 1) {
+            try stdout.print("   {s}Games:{s} {d}\n", .{
+                c.dim,
+                c.reset,
+                preset.gameCount,
+            });
+        }
+        try bw.flush();
+    }
+}
+
+const PositionMap = struct {
+    map: std.StringHashMap(usize),
+    arena: *std.heap.ArenaAllocator,
+
+    fn init(arena: *std.heap.ArenaAllocator) PositionMap {
+        return .{
+            .map = std.StringHashMap(usize).init(arena.allocator()),
+            .arena = arena,
+        };
+    }
+
+    fn recordPosition(self: *PositionMap, board: *DisplayManager) !usize {
+        var key = std.ArrayList(u8).init(self.arena.allocator());
+        defer key.deinit();
+
+        // Create a string representation of the current board state
+        for (board.board) |rank| {
+            for (rank) |square| {
+                if (square) |piece| {
+                    try key.append(piece.toChar());
+                } else {
+                    try key.append('-');
+                }
+            }
+        }
+
+        // Convert to string
+        const positionStr = try self.arena.allocator().dupe(u8, key.items);
+
+        // Get or update count
+        const result = try self.map.getOrPut(positionStr);
+        if (!result.found_existing) {
+            result.valuePtr.* = 0;
+        }
+        result.valuePtr.* += 1;
+        return result.valuePtr.*;
+    }
+
+    fn deinit(self: *PositionMap) void {
+        var it = self.map.keyIterator();
+        while (it.next()) |key| {
+            self.arena.allocator().free(key.*);
+        }
+        self.map.deinit();
+    }
+};
+
+fn isStockfishForfeit(response: []const u8) bool {
+    return std.mem.indexOf(u8, response, "bestmove (none)") != null;
 }
