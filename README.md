@@ -54,6 +54,18 @@ If you don't have any chess engines installed, I recommend my engines [Kirin(C)]
 - Classical (15 seconds per move)
 - Tournament (Best of 3 rapid games)
 
+## Configuration
+zduel has a basic configuration system powered by [TOML](https://toml.io/en/) and my (not great) toml parser written in Zig, [ztoml](https://github.com/strvdr/ztoml).
+
+Currently, only piece color preference is available within the config system, but I will add more features as I want them. If you want a feature, ask me or make it yourself and send a PR :)
+
+To configure, navigate to the `.config` directory and open `zduel.toml`. From there, you can edit the colors as you wish. 
+```fish
+cd .config
+nvim zduel.toml
+...
+```
+
 ## Project Structure
 ```
 zduel/
