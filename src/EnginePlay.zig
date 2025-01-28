@@ -111,11 +111,11 @@ pub const EngineManager = struct {
 
             try self.engines.append(engine);
             found_count += 1;
-            try main.stdout.print("  {s}Found:{s} {s}{s}{s}\n", .{ c.green, c.reset, c.bold, entry.basename, c.reset });
+            try main.stdout.print("{s}Found:{s} {s}{s}{s}\n", .{ c.green, c.reset, c.bold, entry.basename, c.reset });
         }
 
         if (found_count == 0) {
-            try main.stdout.print("  {s}No engines found in the engines directory{s}\n", .{ c.yellow, c.reset });
+            try main.stdout.print("{s}No engines found in the engines directory.{s}\n", .{ c.yellow, c.reset });
         } else {
             try main.stdout.print("\n{s}Found {d} engine{s}{s}\n", .{ c.green, found_count, if (found_count == 1) "" else "s", c.reset });
         }

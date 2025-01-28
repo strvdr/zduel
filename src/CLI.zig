@@ -42,7 +42,6 @@ const DisplayMatchPresets = EngineMatch.DisplayMatchPresets;
 const main = @import("main.zig");
 const cfg = @import("config.zig");
 
-// ANSI color codes
 pub const Color = struct {
     yellow: []const u8 = "\x1b[33m",
     green: []const u8 = "\x1b[32m",
@@ -54,6 +53,35 @@ pub const Color = struct {
     reset: []const u8 = "\x1b[0m",
     dim: []const u8 = "\x1b[2m",
     underline: []const u8 = "\x1b[4m",
+    whitePieces: []const u8 = "\x1b[34m", // Default to blue
+    blackPieces: []const u8 = "\x1b[31m", // Default to red
+
+    pub fn updateColors(self: *Color, config: cfg.Config) void {
+        // Check if the color strings exist and have content
+        if (config.engineOneColor.len > 0) {
+            self.whitePieces = switch (config.engineOneColor[0]) {
+                'r' => self.red,
+                'b' => self.blue,
+                'g' => self.green,
+                'y' => self.yellow,
+                'm' => self.magenta,
+                'c' => self.cyan,
+                else => self.blue, // default to blue
+            };
+        }
+
+        if (config.engineTwoColor.len > 0) {
+            self.blackPieces = switch (config.engineTwoColor[0]) {
+                'r' => self.red,
+                'b' => self.blue,
+                'g' => self.green,
+                'y' => self.yellow,
+                'm' => self.magenta,
+                'c' => self.cyan,
+                else => self.red, // default to red
+            };
+        }
+    }
 };
 
 const Command = struct {
@@ -65,6 +93,7 @@ const Command = struct {
 };
 
 pub const CLI = struct {
+    config: ?cfg.Config = null,
     allocator: std.mem.Allocator,
     engineManager: *EnginePlay.EngineManager,
 
@@ -118,14 +147,22 @@ pub const CLI = struct {
             .category = "Analysis",
             .handler = handleCalibrate,
         },
-        .{
-            .name = "config",
-            .description = "Change your zduel config",
-            .usage = "zduel cfg",
-            .category = "Configuration",
-            .handler = handleConfiguration,
-        },
     };
+
+    pub fn handleConfiguration(self: *CLI, allocator: std.mem.Allocator) !void {
+        if (self.config) |*conf| {
+            conf.deinit();
+        }
+        self.config = try cfg.Config.loadFromFile(allocator);
+        var colors = Color{};
+        colors.updateColors(self.config.?);
+    }
+
+    pub fn deinit(self: *CLI) void {
+        if (self.config) |*conf| {
+            conf.deinit();
+        }
+    }
 
     pub fn handleCommand(self: *CLI, cmdName: []const u8) !void {
         const colors = Color{};
@@ -142,11 +179,7 @@ pub const CLI = struct {
     }
 
     pub fn runInteractiveMode(self: *CLI) !void {
-        const colors = Color{};
         var buf: [1024]u8 = undefined;
-
-        try printHeader();
-        try main.stdout.print("Type \"{s}help{s}\" to get started, or \"{s}quit{s}\" to exit.\n", .{ colors.green, colors.reset, colors.green, colors.reset });
 
         while (true) {
             try main.stdout.print("> ", .{});
@@ -165,10 +198,11 @@ pub const CLI = struct {
 };
 
 // Keep existing helper functions...
-fn printHeader() !void {
+pub fn printHeader() !void {
     const colors = Color{};
     try main.stdout.print("\n{s}zduel{s} - A CLI Chess Tool\n", .{ colors.yellow, colors.reset });
-    try main.stdout.print("========================\n\n", .{});
+    try main.stdout.print("========================\n", .{});
+    try main.stdout.print("Type \"{s}help{s}\" to get started, or \"{s}quit{s}\" to exit.\n", .{ colors.green, colors.reset, colors.green, colors.reset });
 }
 
 // Handler functions...
@@ -203,8 +237,8 @@ fn handlePlayerMatch(allocator: std.mem.Allocator) !void {
 
     // Select color
     try main.stdout.print("\n{s}Choose your color:{s}\n", .{ colors.green, colors.reset });
-    try main.stdout.print("1. {s}White{s}\n", .{ colors.blue, colors.reset });
-    try main.stdout.print("2. {s}Black{s}\n", .{ colors.red, colors.reset });
+    try main.stdout.print("1. {s}White{s}\n", .{ colors.whitePieces, colors.reset });
+    try main.stdout.print("2. {s}Black{s}\n", .{ colors.blackPieces, colors.reset });
     try main.stdout.print("\nSelect (1-2): ", .{});
     try main.bw.flush();
 
@@ -352,11 +386,11 @@ pub fn handleMatch(allocator: std.mem.Allocator) !void {
 
     try manager.listEngines();
 
-    try main.stdout.print("\nSelect {s}WHITE{s} engine (1-{d}): ", .{ colors.blue, colors.reset, manager.engines.items.len });
+    try main.stdout.print("\nSelect {s}WHITE{s} engine (1-{d}): ", .{ colors.whitePieces, colors.reset, manager.engines.items.len });
     try main.bw.flush();
     const whiteIndex = (try getUserInput()) - 1;
 
-    try main.stdout.print("Select {s}BLACK{s} engine (1-{d}): ", .{ colors.red, colors.reset, manager.engines.items.len });
+    try main.stdout.print("Select {s}BLACK{s} engine (1-{d}): ", .{ colors.blackPieces, colors.reset, manager.engines.items.len });
     try main.bw.flush();
     const blackIndex = (try getUserInput()) - 1;
 
@@ -424,13 +458,13 @@ fn printMatchSummary(match: EngineMatch.MatchManager, whiteWins: u32, blackWins:
     try main.stdout.print("\n{s}Match Results:{s}\n", .{ c.bold, c.reset });
     try main.stdout.print("═════════════\n", .{});
     try main.stdout.print("{s}{s}:{s} {d} wins\n", .{
-        c.blue,
+        c.whitePieces,
         match.white.name,
         c.reset,
         whiteWins,
     });
     try main.stdout.print("{s}{s}:{s} {d} wins\n", .{
-        c.red,
+        c.blackPieces,
         match.black.name,
         c.reset,
         blackWins,
@@ -461,12 +495,6 @@ fn getUserInput() !usize {
         return try std.fmt.parseInt(usize, std.mem.trim(u8, userInput, &std.ascii.whitespace), 10);
     }
     return error.InvalidInput;
-}
-
-fn handleConfiguration(allocator: std.mem.Allocator) !void {
-    _ = allocator;
-    //const colors = Color{};
-    try cfg.parseCfg();
 }
 
 fn handleCalibrate(allocator: std.mem.Allocator) !void {

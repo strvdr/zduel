@@ -5,47 +5,57 @@ const ArenaAllocator = std.heap.ArenaAllocator;
 pub const Config = struct {
     engineOneColor: []const u8,
     engineTwoColor: []const u8,
+    arena: *ArenaAllocator, // Keep the arena alive
 
-    pub fn init(engineOneColor: []const u8, engineTwoColor: []const u8) Config {
+    pub fn init() Config {
         return .{
-            .engineOneColor = engineOneColor,
-            .engineTwoColor = engineTwoColor,
+            .engineOneColor = "blue",
+            .engineTwoColor = "red",
+            .arena = undefined,
         };
     }
+
+    pub fn loadFromFile(allocator: std.mem.Allocator) !Config {
+        // Create an arena and store it in the config
+        var arena = try allocator.create(ArenaAllocator);
+        arena.* = ArenaAllocator.init(allocator);
+
+        // Try to read the config file
+        const file = std.fs.cwd().openFile("./.config/zduel.toml", .{}) catch |err| {
+            allocator.destroy(arena);
+            if (err == error.FileNotFound) {
+                return Config.init();
+            }
+            return err;
+        };
+        defer file.close();
+
+        const file_size = try file.getEndPos();
+        const tomlContent = try arena.allocator().alloc(u8, file_size);
+        _ = try file.readAll(tomlContent);
+
+        var parser = ztoml.Parser.init(arena, tomlContent);
+        const result = try parser.parse();
+
+        // Create config with the arena
+        var config = Config{
+            .engineOneColor = "blue",
+            .engineTwoColor = "red",
+            .arena = arena,
+        };
+
+        if (ztoml.getValue(result, &[_][]const u8{ "Engine Colors", "engineOne" })) |value| {
+            config.engineOneColor = value.data.String;
+        }
+        if (ztoml.getValue(result, &[_][]const u8{ "Engine Colors", "engineTwo" })) |value| {
+            config.engineTwoColor = value.data.String;
+        }
+
+        return config;
+    }
+
+    pub fn deinit(self: *Config) void {
+        self.arena.deinit();
+        self.arena.child_allocator.destroy(self.arena);
+    }
 };
-
-pub fn parseCfg() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer {
-        const deinit_status = gpa.deinit();
-        if (deinit_status == .leak) std.debug.print("Memory leak detected!\n", .{});
-    }
-
-    var arena = ArenaAllocator.init(gpa.allocator());
-    defer arena.deinit();
-
-    // Read the file
-    const file = try std.fs.cwd().openFile("./.config/zduel.toml", .{});
-    defer file.close();
-
-    const file_size = try file.getEndPos();
-    const toml_content = try arena.allocator().alloc(u8, file_size);
-    _ = try file.readAll(toml_content);
-
-    var parser = ztoml.Parser.init(&arena, toml_content);
-    const result = try parser.parse();
-
-    // Example: Get and print a specific value
-    const path = [_][]const u8{ "Engine Colors", "engineTwo" };
-    if (ztoml.getValue(result, &path)) |value| {
-        std.debug.print("Value of engineTwo: ", .{});
-        ztoml.printValue(value);
-        std.debug.print("\n", .{});
-    } else {
-        std.debug.print("Value not found\n", .{});
-    }
-}
-
-//pub fn log() !void {
-//    var cfg = Config.init(
-//}

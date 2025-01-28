@@ -39,7 +39,7 @@ const main = @import("main.zig");
 const EnginePlay = @import("EnginePlay.zig");
 const Engine = EnginePlay.Engine;
 const EngineManager = EnginePlay.EngineManager;
-const Color = @import("cli.zig").Color;
+const Color = @import("CLI.zig").Color;
 const DisplayManager = @import("DisplayManager.zig").DisplayManager;
 const Logger = @import("logger.zig").Logger;
 
@@ -302,8 +302,8 @@ pub const MatchManager = struct {
         const blackEngineArena = Engine{ .name = blackName, .path = blackPath };
 
         // Now initialize the UCI engines
-        const white = try UciEngine.init(whiteEngineArena, &arena, colors.blue);
-        const black = try UciEngine.init(blackEngineArena, &arena, colors.red);
+        const white = try UciEngine.init(whiteEngineArena, &arena, colors.whitePieces);
+        const black = try UciEngine.init(blackEngineArena, &arena, colors.blackPieces);
 
         var manager = MatchManager{
             .white = white,

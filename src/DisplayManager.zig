@@ -242,9 +242,9 @@ pub const DisplayManager = struct {
 
                 if (self.board[rank][file]) |piece| {
                     const pieceColor = if (piece.color == .white)
-                        c.blue
+                        c.whitePieces
                     else
-                        c.red;
+                        c.blackPieces;
                     try main.stdout.print("{s}{s} {s}{c} {s}", .{
                         c.reset,
                         squareColor,

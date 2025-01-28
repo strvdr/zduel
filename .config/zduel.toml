@@ -1,3 +1,13 @@
+# Currently, only engine colors are implemented within the config settings. However, 
+# the codebase is modular enough that updating it to have more features shouldn't 
+# be too hard. Also, these .toml files are parsed by my homemade toml parser and
+# may fail in certain (no so) edge cases. If you follow the format below it 
+# should be able to parse :)
+
+# Supported colors: yellow, green, red, blue, magenta, cyan
+# These colors are derived from your terminal's theme colors,
+# so if your system yellow is actually purple ¯\_(ツ)_/¯
+
 [Engine Colors]
 engineOne = "red"
 engineTwo = "blue"

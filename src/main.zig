@@ -49,6 +49,7 @@
 
 const std = @import("std");
 const CLI = @import("CLI.zig");
+const cfg = @import("config.zig");
 const EnginePlay = @import("EnginePlay.zig");
 
 const stdout_file = std.io.getStdOut().writer();
@@ -61,15 +62,23 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
+    try CLI.printHeader();
     // Create engine manager
     var manager = try EnginePlay.EngineManager.init(allocator);
     defer manager.deinit();
 
-    // Scan for available engines at startup
-    try manager.scanEngines();
-
     // Initialize CLI
     var cliHandler = CLI.CLI.init(allocator, &manager);
+
+    var colors = CLI.Color{};
+    // Load and apply config
+    const config = try cfg.Config.loadFromFile(allocator);
+    colors.updateColors(config);
+
+    // Scan for available engines at startup
+    manager.scanEngines() catch {
+        std.debug.print("No engines directory found. From the project root, please \"mkdir engines\".", .{});
+    };
 
     // Parse command line arguments
     var args = std.process.args();
