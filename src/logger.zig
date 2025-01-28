@@ -29,8 +29,8 @@
 //! ```
 
 const std = @import("std");
-const cli = @import("cli.zig");
-const Color = cli.Color;
+const CLI = @import("CLI.zig");
+const Color = CLI.Color;
 
 pub const Logger = struct {
     allocator: std.mem.Allocator,
@@ -77,15 +77,15 @@ pub const Logger = struct {
 
     pub fn start(self: *Logger, whiteName: []const u8, blackName: []const u8) !void {
         const timestamp = try getTimestamp(self.arena.allocator());
-        const safe_name = try sanitizeFilename(self.arena.allocator(), whiteName);
-        const safe_black = try sanitizeFilename(self.arena.allocator(), blackName);
+        const safeWhite = try sanitizeFilename(self.arena.allocator(), whiteName);
+        const safeBlack = try sanitizeFilename(self.arena.allocator(), blackName);
 
         try std.fs.cwd().makePath("logs");
 
         const path = try std.fmt.allocPrint(
             self.arena.allocator(),
             "logs/zduel_{s}_vs_{s}_{s}.log",
-            .{ safe_name, safe_black, timestamp },
+            .{ safeWhite, safeBlack, timestamp },
         );
 
         self.file = try std.fs.cwd().createFile(path, .{});

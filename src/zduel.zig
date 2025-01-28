@@ -14,13 +14,13 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub const cli = @import("cli.zig");
-pub const displayManager = @import("displayManager.zig");
-pub const engineMatch = @import("engineMatch.zig");
-pub const enginePlay = @import("enginePlay.zig");
+pub const CLI = @import("CLI.zig");
+pub const DisplayManager = @import("DisplayManager.zig");
+pub const EngineMatch = @import("EngineMatch.zig");
+pub const EnginePlay = @import("EnginePlay.zig");
 pub const logger = @import("logger.zig");
-pub const playerMatch = @import("playerMatch.zig");
-pub const eloEstimator = @import("eloEstimator.zig");
+pub const PlayerMatch = @import("PlayerMatch.zig");
+pub const EloEstimator = @import("EloEstimator.zig");
 pub const main = @import("main.zig");
 
 test {

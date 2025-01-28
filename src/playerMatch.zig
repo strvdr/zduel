@@ -15,17 +15,13 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
-const Engine = @import("enginePlay.zig").Engine;
-const EngineManager = @import("enginePlay.zig").EngineManager;
+const main = @import("main.zig");
+const Engine = @import("EnginePlay.zig").Engine;
+const EngineManager = @import("EnginePlay.zig").EngineManager;
 const Color = @import("cli.zig").Color;
-const DisplayManager = @import("displayManager.zig").DisplayManager;
+const DisplayManager = @import("DisplayManager.zig").DisplayManager;
 const Logger = @import("logger.zig").Logger;
-const UciEngine = @import("engineMatch.zig").UciEngine;
-
-const stdout_file = std.io.getStdOut().writer();
-const stdin = std.io.getStdIn().reader();
-var bw = std.io.bufferedWriter(stdout_file);
-const stdout = bw.writer();
+const UciEngine = @import("EngineMatch.zig").UciEngine;
 
 pub const PlayerMatchPreset = struct {
     name: []const u8,
@@ -139,12 +135,12 @@ pub const PlayerMatchManager = struct {
 
             if (isPlayerTurn) {
                 // Clear the area below the board for messages
-                try stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
-                try stdout.print("\n{s}Your move{s} (e.g., e2e4 or 0000 to resign): ", .{ c.green, c.reset });
-                try bw.flush();
+                try main.stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
+                try main.stdout.print("\n{s}Your move{s} (e.g., e2e4 or 0000 to resign): ", .{ c.green, c.reset });
+                try main.bw.flush();
 
                 var buf: [10]u8 = undefined;
-                const userInput = (try stdin.readUntilDelimiterOrEof(&buf, '\n')) orelse return error.InvalidInput;
+                const userInput = (try main.stdin.readUntilDelimiterOrEof(&buf, '\n')) orelse return error.InvalidInput;
                 const move = std.mem.trim(u8, userInput, &std.ascii.whitespace);
 
                 if (std.mem.eql(u8, move, "0000")) {
@@ -155,8 +151,8 @@ pub const PlayerMatchManager = struct {
 
                 if (!isValidMove(move)) {
                     // Clear previous message and reprint error
-                    try stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
-                    try stdout.print("\n{s}Invalid move format. Use standard notation (e.g., e2e4){s}\n", .{ c.red, c.reset });
+                    try main.stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
+                    try main.stdout.print("\n{s}Invalid move format. Use standard notation (e.g., e2e4){s}\n", .{ c.red, c.reset });
                     self.move_count -= 1; // Revert move count since this was invalid
                     continue;
                 }
@@ -195,17 +191,17 @@ pub const PlayerMatchManager = struct {
             }
         }
 
-        try stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
-        try stdout.print("\n{s}Game Over!{s} ", .{ c.bold, c.reset });
+        try main.stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
+        try main.stdout.print("\n{s}Game Over!{s} ", .{ c.bold, c.reset });
 
         const result = winner orelse .draw;
         switch (result) {
-            .playerWin => try stdout.print("{s}Congratulations! You win!{s}\n", .{ c.green, c.reset }),
-            .engineWin => try stdout.print("{s}The engine wins!{s}\n", .{ c.red, c.reset }),
-            .draw => try stdout.print("{s}Game drawn!{s}\n", .{ c.yellow, c.reset }),
+            .playerWin => try main.stdout.print("{s}Congratulations! You win!{s}\n", .{ c.green, c.reset }),
+            .engineWin => try main.stdout.print("{s}The engine wins!{s}\n", .{ c.red, c.reset }),
+            .draw => try main.stdout.print("{s}Game drawn!{s}\n", .{ c.yellow, c.reset }),
         }
 
-        try bw.flush();
+        try main.bw.flush();
         return result;
     }
 };
