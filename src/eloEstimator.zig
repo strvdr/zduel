@@ -15,17 +15,13 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
-const engineMatch = @import("engineMatch.zig");
-const enginePlay = @import("enginePlay.zig");
-const Engine = enginePlay.Engine;
-const EngineManager = enginePlay.EngineManager;
-const MatchManager = engineMatch.MatchManager;
+const main = @import("main.zig");
+const EngineMatch = @import("EngineMatch.zig");
+const EnginePlay = @import("EnginePlay.zig");
+const Engine = EnginePlay.Engine;
+const EngineManager = EnginePlay.EngineManager;
+const MatchManager = EngineMatch.MatchManager;
 const Logger = @import("logger.zig").Logger;
-
-const stdout_file = std.io.getStdOut().writer();
-const stdin = std.io.getStdIn().reader();
-var bw = std.io.bufferedWriter(stdout_file);
-const stdout = bw.writer();
 
 pub const EloCalibrationSettings = struct {
     gamesPerLevel: u32 = 4,
@@ -69,6 +65,10 @@ pub const EloEstimator = struct {
         };
     }
 
+    pub fn deinit(self: *EloEstimator) void {
+        self.allocator.free();
+    }
+
     fn findStockfish(self: *EloEstimator) !Engine {
         for (self.engineManager.engines.items) |engine| {
             var nameBuf: [256]u8 = undefined;
@@ -90,7 +90,7 @@ pub const EloEstimator = struct {
         for (self.settings.testLevels, self.settings.levelElos) |level, levelElo| {
             std.debug.print("\nTesting against Stockfish level {d} (Elo ~{d})...\n", .{ level, levelElo });
 
-            const preset = engineMatch.MatchPreset{
+            const preset = EngineMatch.MatchPreset{
                 .name = "Calibration",
                 .description = "Calibration match",
                 .moveTimeMS = self.settings.moveTimeMS,
@@ -155,7 +155,7 @@ pub const EloEstimator = struct {
 
                 // Add a small delay and clear line for next game message
                 std.time.sleep(100 * std.time.ns_per_ms);
-                try stdout.print("\x1b[1A\x1b[K", .{}); // Move up one line and clear it
+                try main.stdout.print("\x1b[1A\x1b[K", .{}); // Move up one line and clear it
             }
             const score = (@as(f64, @floatFromInt(wins)) + @as(f64, @floatFromInt(draws)) * 0.5) /
                 @as(f64, @floatFromInt(self.settings.gamesPerLevel));

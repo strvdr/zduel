@@ -28,8 +28,9 @@
 //! try manager.listEngines();
 //! ```
 const std = @import("std");
+const main = @import("main.zig");
 const builtin = @import("builtin");
-const cli = @import("cli.zig");
+const CLI = @import("CLI.zig");
 
 pub const Engine = struct {
     name: []const u8,
@@ -39,13 +40,13 @@ pub const Engine = struct {
 pub const EngineManager = struct {
     allocator: std.mem.Allocator,
     engines: std.ArrayList(Engine),
-    colors: cli.Color,
+    colors: CLI.Color,
 
     pub fn init(allocator: std.mem.Allocator) !EngineManager {
         return EngineManager{
             .allocator = allocator,
             .engines = std.ArrayList(Engine).init(allocator),
-            .colors = cli.Color{},
+            .colors = CLI.Color{},
         };
     }
 
@@ -61,18 +62,18 @@ pub const EngineManager = struct {
     pub fn listEngines(self: *EngineManager) !void {
         const c = self.colors;
         if (self.engines.items.len == 0) {
-            try std.io.getStdOut().writer().print("\n{s}No engines found. Use 'engines add' to add chess engines.{s}\n", .{ c.yellow, c.reset });
+            try main.stdout.print("\n{s}No engines found. Use 'engines add' to add chess engines.{s}\n", .{ c.yellow, c.reset });
             return;
         }
 
-        try std.io.getStdOut().writer().print("\n{s}{s}Available Chess Engines{s}\n", .{ c.bold, c.blue, c.reset });
-        try std.io.getStdOut().writer().print("{s}════════════════════════{s}\n\n", .{ c.dim, c.reset });
+        try main.stdout.print("\n{s}{s}Available Chess Engines{s}\n", .{ c.bold, c.blue, c.reset });
+        try main.stdout.print("{s}════════════════════════{s}\n\n", .{ c.dim, c.reset });
 
         for (self.engines.items, 0..) |engine, i| {
-            try std.io.getStdOut().writer().print("{s}[{d}]{s} {s}{s}{s}\n", .{ c.cyan, i + 1, c.reset, c.bold, engine.name, c.reset });
-            try std.io.getStdOut().writer().print("   {s}Path:{s} {s}{s}{s}\n", .{ c.dim, c.reset, c.green, engine.path, c.reset });
+            try main.stdout.print("{s}[{d}]{s} {s}{s}{s}\n", .{ c.cyan, i + 1, c.reset, c.bold, engine.name, c.reset });
+            try main.stdout.print("   {s}Path:{s} {s}{s}{s}\n", .{ c.dim, c.reset, c.green, engine.path, c.reset });
         }
-        try std.io.getStdOut().writer().print("\n", .{});
+        try main.stdout.print("\n", .{});
     }
 
     // Scan directory and load available engines
@@ -80,7 +81,7 @@ pub const EngineManager = struct {
         const c = self.colors;
         var cwd = std.fs.cwd();
 
-        try std.io.getStdOut().writer().print("\n{s}Scanning for chess engines...{s}\n", .{ c.blue, c.reset });
+        try main.stdout.print("\n{s}Scanning for chess engines...{s}\n", .{ c.blue, c.reset });
 
         var dir = try cwd.openDir(
             "engines",
@@ -110,13 +111,13 @@ pub const EngineManager = struct {
 
             try self.engines.append(engine);
             found_count += 1;
-            try std.io.getStdOut().writer().print("  {s}Found:{s} {s}{s}{s}\n", .{ c.green, c.reset, c.bold, entry.basename, c.reset });
+            try main.stdout.print("  {s}Found:{s} {s}{s}{s}\n", .{ c.green, c.reset, c.bold, entry.basename, c.reset });
         }
 
         if (found_count == 0) {
-            try std.io.getStdOut().writer().print("  {s}No engines found in the engines directory{s}\n", .{ c.yellow, c.reset });
+            try main.stdout.print("  {s}No engines found in the engines directory{s}\n", .{ c.yellow, c.reset });
         } else {
-            try std.io.getStdOut().writer().print("\n{s}Found {d} engine{s}{s}\n", .{ c.green, found_count, if (found_count == 1) "" else "s", c.reset });
+            try main.stdout.print("\n{s}Found {d} engine{s}{s}\n", .{ c.green, found_count, if (found_count == 1) "" else "s", c.reset });
         }
     }
 
@@ -128,7 +129,7 @@ pub const EngineManager = struct {
         }
 
         const engine = self.engines.items[index];
-        try std.io.getStdOut().writer().print("\n{s}Launching engine:{s} {s}{s}{s}\n", .{ c.blue, c.reset, c.bold, engine.name, c.reset });
+        try main.stdout.print("\n{s}Launching engine:{s} {s}{s}{s}\n", .{ c.blue, c.reset, c.bold, engine.name, c.reset });
 
         var child = std.process.Child.init(
             &[_][]const u8{engine.path},
@@ -140,22 +141,22 @@ pub const EngineManager = struct {
             _ = child.wait() catch {};
         }
 
-        try std.io.getStdOut().writer().print("{s}Starting process...{s}\n", .{ c.dim, c.reset });
+        try main.stdout.print("{s}Starting process...{s}\n", .{ c.dim, c.reset });
         try child.spawn();
 
         const term = try child.wait();
         if (term.Exited == 0) {
-            try std.io.getStdOut().writer().print("\r{s}✓ Engine completed successfully{s}   \n", .{ c.green, c.reset });
+            try main.stdout.print("\r{s}✓ Engine completed successfully{s}   \n", .{ c.green, c.reset });
         } else {
-            try std.io.getStdOut().writer().print("\r{s}✗ Engine exited with status: {d}{s}   \n", .{ c.red, term.Exited, c.reset });
+            try main.stdout.print("\r{s}✗ Engine exited with status: {d}{s}   \n", .{ c.red, term.Exited, c.reset });
         }
     }
 };
 
 // Function to get user input as number
 fn getUserInput(reader: anytype, buffer: []u8) !usize {
-    if (try reader.readUntilDelimiterOrEof(buffer, '\n')) |user_input| {
-        const trimmed = std.mem.trim(u8, user_input, &std.ascii.whitespace);
+    if (try reader.readUntilDelimiterOrEof(buffer, '\n')) |userInput| {
+        const trimmed = std.mem.trim(u8, userInput, &std.ascii.whitespace);
         return try std.fmt.parseInt(usize, trimmed, 10);
     } else {
         return error.InvalidInput;
@@ -177,22 +178,22 @@ pub fn handleEngines(allocator: std.mem.Allocator) !void {
         try manager.listEngines();
         if (manager.engines.items.len == 0) break;
 
-        try std.io.getStdOut().writer().print("{s}Select an engine (1-{d}) or 0 to exit:{s} ", .{ c.blue, manager.engines.items.len, c.reset });
+        try main.stdout.print("{s}Select an engine (1-{d}) or 0 to exit:{s} ", .{ c.blue, manager.engines.items.len, c.reset });
 
         const choice = getUserInput(stdin, &buffer) catch |err| {
-            try std.io.getStdOut().writer().print("\n{s}Invalid input: {any}{s}\n", .{ c.red, err, c.reset });
+            try main.stdout.print("\n{s}Invalid input: {any}{s}\n", .{ c.red, err, c.reset });
             continue;
         };
 
         if (choice == 0) break;
 
         if (choice > manager.engines.items.len) {
-            try std.io.getStdOut().writer().print("\n{s}Please select a number between 1 and {d}{s}\n", .{ c.yellow, manager.engines.items.len, c.reset });
+            try main.stdout.print("\n{s}Please select a number between 1 and {d}{s}\n", .{ c.yellow, manager.engines.items.len, c.reset });
             continue;
         }
 
         manager.runEngine(choice - 1) catch |err| {
-            try std.io.getStdOut().writer().print("\n{s}Error running engine: {any}{s}\n", .{ c.red, err, c.reset });
+            try main.stdout.print("\n{s}Error running engine: {any}{s}\n", .{ c.red, err, c.reset });
         };
     }
 }

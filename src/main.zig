@@ -48,8 +48,13 @@
 //! https://zduel.strydr.net for latest updates.
 
 const std = @import("std");
-const cli = @import("cli.zig");
-const enginePlay = @import("enginePlay.zig");
+const CLI = @import("CLI.zig");
+const EnginePlay = @import("EnginePlay.zig");
+
+const stdout_file = std.io.getStdOut().writer();
+pub var bw = std.io.bufferedWriter(stdout_file);
+pub const stdout = bw.writer();
+pub const stdin = std.io.getStdIn().reader();
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -57,14 +62,14 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // Create engine manager
-    var manager = try enginePlay.EngineManager.init(allocator);
+    var manager = try EnginePlay.EngineManager.init(allocator);
     defer manager.deinit();
 
     // Scan for available engines at startup
     try manager.scanEngines();
 
     // Initialize CLI
-    var cli_handler = cli.CLI.init(allocator, &manager);
+    var cliHandler = CLI.CLI.init(allocator, &manager);
 
     // Parse command line arguments
     var args = std.process.args();
@@ -77,10 +82,10 @@ pub fn main() !void {
         else
             arg;
 
-        try cli_handler.handleCommand(cmd);
+        try cliHandler.handleCommand(cmd);
         return;
     }
 
     // No arguments, run in interactive mode
-    try cli_handler.runInteractiveMode();
+    try cliHandler.runInteractiveMode();
 }

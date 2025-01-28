@@ -35,17 +35,13 @@
 //! ```
 
 const std = @import("std");
-const enginePlay = @import("enginePlay.zig");
-const Engine = enginePlay.Engine;
-const EngineManager = enginePlay.EngineManager;
+const main = @import("main.zig");
+const EnginePlay = @import("EnginePlay.zig");
+const Engine = EnginePlay.Engine;
+const EngineManager = EnginePlay.EngineManager;
 const Color = @import("cli.zig").Color;
-const DisplayManager = @import("displayManager.zig").DisplayManager;
+const DisplayManager = @import("DisplayManager.zig").DisplayManager;
 const Logger = @import("logger.zig").Logger;
-
-const stdout_file = std.io.getStdOut().writer();
-const stdin = std.io.getStdIn().reader();
-var bw = std.io.bufferedWriter(stdout_file);
-const stdout = bw.writer();
 
 pub const UciEngineError = error{
     ProcessStartFailed,
@@ -307,7 +303,7 @@ pub const MatchManager = struct {
 
         // Now initialize the UCI engines
         const white = try UciEngine.init(whiteEngineArena, &arena, colors.blue);
-        const black = try UciEngine.init(blackEngineArena, &arena, colors.magenta);
+        const black = try UciEngine.init(blackEngineArena, &arena, colors.red);
 
         var manager = MatchManager{
             .white = white,
@@ -421,7 +417,7 @@ pub const MatchManager = struct {
                         // Handle Stockfish forfeit/mate
                         isGameOver = true;
                         winner = if (currentPlayer == &self.white) &self.black else &self.white;
-                        try stdout.print("\n{s}{s} acknowledges defeat!{s}\n", .{
+                        try main.stdout.print("\n{s}{s} acknowledges defeat!{s}\n", .{
                             currentPlayer.color,
                             currentPlayer.name,
                             self.colors.reset,
@@ -439,7 +435,7 @@ pub const MatchManager = struct {
                 if (std.mem.eql(u8, m, "0000")) {
                     isGameOver = true;
                     winner = if (currentPlayer == &self.white) &self.black else &self.white;
-                    try stdout.print("\n{s}{s} resigns!{s}\n", .{
+                    try main.stdout.print("\n{s}{s} resigns!{s}\n", .{
                         currentPlayer.color,
                         currentPlayer.name,
                         self.colors.reset,
@@ -474,22 +470,22 @@ pub const MatchManager = struct {
                 drawReason = "move limit";
             }
         }
-        try stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
+        try main.stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
         const c = self.colors;
-        try stdout.print("\n{s}Game Over!{s} ", .{ c.bold, c.reset });
+        try main.stdout.print("\n{s}Game Over!{s} ", .{ c.bold, c.reset });
 
         var result = MatchResult.draw;
 
         if (winner) |w| {
-            try stdout.print("{s}{s}{s} wins by checkmate!\n", .{ w.color, w.name, c.reset });
+            try main.stdout.print("{s}{s}{s} wins by checkmate!\n", .{ w.color, w.name, c.reset });
             result = if (w == &self.white) .whiteWin else .blackWin;
         } else if (drawReason) |reason| {
-            try stdout.print("{s}Draw by {s}!{s}\n", .{ c.yellow, reason, c.reset });
+            try main.stdout.print("{s}Draw by {s}!{s}\n", .{ c.yellow, reason, c.reset });
         } else {
-            try stdout.print("{s}Draw!{s}\n", .{ c.yellow, c.reset });
+            try main.stdout.print("{s}Draw!{s}\n", .{ c.yellow, c.reset });
         }
 
-        try bw.flush();
+        try main.bw.flush();
         return result;
     }
 };
@@ -524,13 +520,13 @@ fn isStalemate(move: []const u8) bool {
     return std.mem.endsWith(u8, move, "=");
 }
 
-pub fn displayMatchPresets() !void {
+pub fn DisplayMatchPresets() !void {
     const c = Color{};
-    try stdout.print("\n{s}Available Match Types:{s}\n", .{ c.green, c.reset });
-    try stdout.print("══════════════════════\n", .{});
+    try main.stdout.print("\n{s}Available Match Types:{s}\n", .{ c.green, c.reset });
+    try main.stdout.print("══════════════════════\n", .{});
 
     for (MATCH_PRESETS, 0..) |preset, i| {
-        try stdout.print("{s}[{d}]{s} {s}{s}{s}\n", .{
+        try main.stdout.print("{s}[{d}]{s} {s}{s}{s}\n", .{
             c.cyan,
             i + 1,
             c.reset,
@@ -538,19 +534,19 @@ pub fn displayMatchPresets() !void {
             preset.name,
             c.reset,
         });
-        try stdout.print("   {s}{s}{s}\n", .{
+        try main.stdout.print("   {s}{s}{s}\n", .{
             c.dim,
             preset.description,
             c.reset,
         });
         if (preset.gameCount > 1) {
-            try stdout.print("   {s}Games:{s} {d}\n", .{
+            try main.stdout.print("   {s}Games:{s} {d}\n", .{
                 c.dim,
                 c.reset,
                 preset.gameCount,
             });
         }
-        try bw.flush();
+        try main.bw.flush();
     }
 }
 
@@ -586,10 +582,10 @@ const PositionMap = struct {
         // Get or update count
         const result = try self.map.getOrPut(positionStr);
         if (!result.found_existing) {
-            result.valuePtr.* = 0;
+            result.value_ptr.* = 0;
         }
-        result.valuePtr.* += 1;
-        return result.valuePtr.*;
+        result.value_ptr.* += 1;
+        return result.value_ptr.*;
     }
 
     fn deinit(self: *PositionMap) void {
