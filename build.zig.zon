@@ -8,8 +8,8 @@
     },
     .dependencies = .{
         .ztoml = .{
-            .url = "https://github.com/strvdr/ztoml/archive/zduel-integration.tar.gz",
-            .hash = "122061da9bc6791a1a033b5ade20435d1fa04aa785ba59d17f769e85554ff0960746",  // This placeholder will make Zig tell us the correct hash
+            .url = "https://github.com/strvdr/ztoml/archive/array-tables.tar.gz",
+            .hash = "12200bda2f723a4c0273888cec381d91ff895c356ab0c98f0c9d5799abdf9c1a8d72",  // This placeholder will make Zig tell us the correct hash
         },
     },
 }

@@ -123,85 +123,125 @@ pub const HistoryManager = struct {
         defer parser_arena.deinit();
 
         var parser = ztoml.Parser.init(&parser_arena, content);
-        const result = try parser.parse();
+        const result = parser.parse() catch |err| {
+            std.debug.print("Warning: Could not parse history file: {s}\n", .{@errorName(err)});
+            return;
+        };
 
+        // Iterate through the top-level entries (matchups)
         var it = result.iterator();
         while (it.next()) |entry| {
             const matchup = entry.key_ptr.*;
-            if (matchup.len < 5) continue; // Minimum length for "a vs b"
+            // Skip the special section headers
+            if (std.mem.eql(u8, matchup, "Engine One") or
+                std.mem.eql(u8, matchup, "Engine Two"))
+            {
+                continue;
+            }
 
-            const engineNames = try self.parseMatchup(matchup);
+            // Use a temporary arena for parsing matchup
+            var temp_arena = std.heap.ArenaAllocator.init(self.allocator);
+            defer temp_arena.deinit();
+
+            const engineNames = self.parseMatchup(matchup, &temp_arena) catch |err| {
+                std.debug.print("Warning: Invalid matchup format '{s}': {s}\n", .{ matchup, @errorName(err) });
+                continue;
+            };
+
+            // Create history with main allocator
             var history = try EngineHistory.init(self.allocator, engineNames[0], engineNames[1]);
+            errdefer history.deinit();
 
-            // Use ztoml.getValue properly
-            const engineOne = &[_][]const u8{ matchup, "Engine One" };
-            const engineTwo = &[_][]const u8{ matchup, "Engine Two" };
+            // Get the nested tables for this matchup
+            if (entry.value_ptr.*.data == .Table) {
+                const matchupTable = entry.value_ptr.*.data.Table;
 
-            if (ztoml.getValue(result, engineOne)) |value| {
-                history.engineOneStats = try self.parseStatistics(value);
+                // Parse Engine One stats
+                if (matchupTable.get("Engine One")) |engineOneValue| {
+                    if (engineOneValue.data == .Array) {
+                        const array = engineOneValue.data.Array;
+                        if (array.len > 0) {
+                            history.engineOneStats = try self.parseStatistics(array[0]);
+                        }
+                    }
+                }
+
+                // Parse Engine Two stats
+                if (matchupTable.get("Engine Two")) |engineTwoValue| {
+                    if (engineTwoValue.data == .Array) {
+                        const array = engineTwoValue.data.Array;
+                        if (array.len > 0) {
+                            history.engineTwoStats = try self.parseStatistics(array[0]);
+                        }
+                    }
+                }
             }
 
-            if (ztoml.getValue(result, engineTwo)) |value| {
-                history.engineTwoStats = try self.parseStatistics(value);
-            }
-
-            try self.histories.put(try history.formatMatchup(), history);
+            // Format matchup key and store in hashmap
+            const formatted_key = try history.formatMatchup();
+            try self.histories.put(formatted_key, history);
         }
-    }
-
-    fn parseMatchup(self: *Self, matchup: []const u8) ![2][]const u8 {
-        var it = std.mem.splitSequence(u8, matchup[1 .. matchup.len - 1], " vs ");
-        const engine1 = it.next() orelse return error.InvalidMatchup;
-        const engine2 = it.next() orelse return error.InvalidMatchup;
-
-        return .{
-            try self.allocator.dupe(u8, engine1),
-            try self.allocator.dupe(u8, engine2),
-        };
     }
 
     fn parseStatistics(self: *Self, value: ztoml.TomlValue) !MatchStatistics {
         _ = self;
         var stats = MatchStatistics{};
 
-        switch (value.data) {
-            .Array => |array| {
-                for (array) |item| {
-                    switch (item.data) {
-                        .Table => |table| {
-                            if (table.get("blackWins")) |v| {
-                                switch (v.data) {
-                                    .Integer => |i| stats.blackWins = @intCast(i),
-                                    else => {},
-                                }
-                            }
-                            if (table.get("whiteWins")) |v| {
-                                switch (v.data) {
-                                    .Integer => |i| stats.whiteWins = @intCast(i),
-                                    else => {},
-                                }
-                            }
-                            if (table.get("blackDraws")) |v| {
-                                switch (v.data) {
-                                    .Integer => |i| stats.blackDraws = @intCast(i),
-                                    else => {},
-                                }
-                            }
-                            if (table.get("whiteDraws")) |v| {
-                                switch (v.data) {
-                                    .Integer => |i| stats.whiteDraws = @intCast(i),
-                                    else => {},
-                                }
-                            }
-                        },
-                        else => {},
-                    }
+        if (value.data == .Table) {
+            const table = value.data.Table;
+
+            if (table.get("blackWins")) |v| {
+                if (v.data == .Integer) {
+                    stats.blackWins = @intCast(v.data.Integer);
                 }
-            },
-            else => {},
+            }
+            if (table.get("whiteWins")) |v| {
+                if (v.data == .Integer) {
+                    stats.whiteWins = @intCast(v.data.Integer);
+                }
+            }
+            if (table.get("blackDraws")) |v| {
+                if (v.data == .Integer) {
+                    stats.blackDraws = @intCast(v.data.Integer);
+                }
+            }
+            if (table.get("whiteDraws")) |v| {
+                if (v.data == .Integer) {
+                    stats.whiteDraws = @intCast(v.data.Integer);
+                }
+            }
         }
 
         return stats;
+    }
+
+    fn parseMatchup(self: *Self, matchup: []const u8, arena: *std.heap.ArenaAllocator) !struct { []const u8, []const u8 } {
+        _ = self;
+        // Remove the square brackets if they exist
+        const stripped = if (matchup[0] == '[' and matchup[matchup.len - 1] == ']')
+            matchup[1 .. matchup.len - 1]
+        else
+            matchup;
+
+        // Split on " vs " and handle potential errors
+        var it = std.mem.splitSequence(u8, stripped, " vs ");
+
+        // Get first engine name
+        const engine1 = it.next() orelse return error.InvalidMatchup;
+        if (engine1.len == 0) return error.InvalidMatchup;
+
+        // Get second engine name
+        const engine2 = it.next() orelse return error.InvalidMatchup;
+        if (engine2.len == 0) return error.InvalidMatchup;
+
+        // Check if there's any remaining content (which would be invalid)
+        if (it.next() != null) return error.InvalidMatchup;
+
+        // Use the provided arena for allocations
+        const trimmed1 = try arena.allocator().dupe(u8, std.mem.trim(u8, engine1, &std.ascii.whitespace));
+        const trimmed2 = try arena.allocator().dupe(u8, std.mem.trim(u8, engine2, &std.ascii.whitespace));
+
+        return .{ trimmed1, trimmed2 };
     }
 
     pub fn saveToFile(self: *Self) !void {
