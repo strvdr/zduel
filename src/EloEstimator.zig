@@ -97,7 +97,8 @@ pub const EloEstimator = struct {
                 .gameCount = 1,
             };
 
-            var match = try MatchManager.init(engine, stockfish, self.allocator, preset);
+            var match = try MatchManager.init(engine, stockfish, self.allocator, preset, null // No history tracking for calibration matches
+            );
             defer match.deinit();
 
             try match.white.initialize(&match.logger);
@@ -148,9 +149,9 @@ pub const EloEstimator = struct {
 
                 const result = try match.playMatch();
                 switch (result) {
-                    .whiteWin => wins += 1,
+                    .win => wins += 1,
                     .draw => draws += 1,
-                    .blackWin => {},
+                    .loss => {},
                 }
 
                 // Add a small delay and clear line for next game message

@@ -42,6 +42,13 @@ const EngineManager = EnginePlay.EngineManager;
 const Color = @import("CLI.zig").Color;
 const DisplayManager = @import("DisplayManager.zig").DisplayManager;
 const Logger = @import("logger.zig").Logger;
+const MatchHistory = @import("MatchHistory.zig");
+
+const MatchResult = enum {
+    whiteWin,
+    blackWin,
+    draw,
+};
 
 pub const UciEngineError = error{
     ProcessStartFailed,
@@ -281,9 +288,10 @@ pub const MatchManager = struct {
     moveTimeMS: u32,
     gameCount: u32,
     colors: Color,
-    move_count: usize = 0,
+    moveCount: usize = 0,
+    historyManager: ?*MatchHistory.HistoryManager = null,
 
-    pub fn init(whiteEngine: Engine, blackEngine: Engine, allocator: std.mem.Allocator, preset: MatchPreset) !MatchManager {
+    pub fn init(whiteEngine: Engine, blackEngine: Engine, allocator: std.mem.Allocator, preset: MatchPreset, historyManager: ?*MatchHistory.HistoryManager) !MatchManager {
         const colors = Color{};
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
@@ -313,7 +321,8 @@ pub const MatchManager = struct {
             .moveTimeMS = preset.moveTimeMS,
             .gameCount = preset.gameCount,
             .colors = colors,
-            .move_count = 0,
+            .moveCount = 0,
+            .historyManager = historyManager,
         };
 
         try manager.logger.start(manager.white.name, manager.black.name);
@@ -332,12 +341,6 @@ pub const MatchManager = struct {
         self.arena.deinit();
     }
 
-    const MatchResult = enum {
-        whiteWin,
-        blackWin,
-        draw,
-    };
-
     fn getPositionKey(self: *MatchManager, display: *DisplayManager) ![]const u8 {
         var key = std.ArrayList(u8).init(self.arena.allocator());
         errdefer key.deinit();
@@ -355,13 +358,38 @@ pub const MatchManager = struct {
         return key.toOwnedSlice();
     }
 
-    pub fn playMatch(self: *MatchManager) !MatchResult {
+    pub fn playMatch(self: *MatchManager) !MatchHistory.HistoryMatchResult {
+        const result = try self.playMatchInternal();
+
+        // Convert result to HistoryMatchResult
+        const matchResult: MatchHistory.HistoryMatchResult = if (result == .whiteWin)
+            .win
+        else if (result == .blackWin)
+            .loss
+        else
+            .draw;
+
+        // Record match result in history if available
+        if (self.historyManager) |hm| {
+            try hm.updateMatchResult(
+                self.white.name,
+                self.black.name,
+                true, // white engine is engine1
+                matchResult,
+            );
+        }
+
+        // Return the converted result
+        return matchResult;
+    }
+
+    fn playMatchInternal(self: *MatchManager) !MatchResult {
         var display = try DisplayManager.init(self.arena.allocator());
         defer display.deinit();
 
         try display.initializeBoard();
 
-        self.move_count = 0;
+        self.moveCount = 0;
 
         // Initialize both engines if not already done
         if (!self.white.isInitialized) try self.white.initialize(&self.logger);
@@ -400,7 +428,7 @@ pub const MatchManager = struct {
         defer positions.deinit();
 
         while (!isGameOver) {
-            self.move_count += 1;
+            self.moveCount += 1;
             const posCommand = try std.fmt.allocPrint(self.arena.allocator(), "position startpos moves {s}", .{try formatMovesList(self.arena.allocator(), &moves)});
 
             const goCommand = try std.fmt.allocPrint(self.arena.allocator(), "go movetime {d}", .{self.moveTimeMS});
@@ -442,7 +470,7 @@ pub const MatchManager = struct {
                     });
                 } else {
                     try moves.append(m);
-                    try display.updateMove(m, currentPlayer.name, self.move_count);
+                    try display.updateMove(m, currentPlayer.name, self.moveCount);
 
                     if (isCheckmate(m)) {
                         winner = currentPlayer;

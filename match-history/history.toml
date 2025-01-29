@@ -1,0 +1,12 @@
+[kirin vs kirin-chess]
+[[Engine One]]
+blackWins = 10
+whiteWins = 20
+blackDraws = 12
+whiteDraws = 4
+
+[[Engine Two]]
+blackWins = 20
+whiteWins = 8
+blackDraws = 9
+whiteDraws = 10

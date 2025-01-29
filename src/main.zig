@@ -68,7 +68,8 @@ pub fn main() !void {
     defer manager.deinit();
 
     // Initialize CLI
-    var cliHandler = CLI.CLI.init(allocator, &manager);
+    var cliHandler = try CLI.CLI.init(allocator, &manager);
+    defer cliHandler.deinit();
 
     var colors = CLI.Color{};
     // Load and apply config

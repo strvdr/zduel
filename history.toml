@@ -1,0 +1,13 @@
+[kirin vs kirin-chess]
+[[Engine One]]
+blackWins = 0
+whiteWins = 1
+blackDraws = 0
+whiteDraws = 0
+
+[[Engine Two]]
+blackWins = 0
+whiteWins = 0
+blackDraws = 0
+whiteDraws = 0
+
