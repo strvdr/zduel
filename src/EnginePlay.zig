@@ -46,7 +46,7 @@ pub const EngineManager = struct {
         return EngineManager{
             .allocator = allocator,
             .engines = std.ArrayList(Engine).init(allocator),
-            .colors = CLI.Color{},
+            .colors = main.colors,
         };
     }
 
@@ -60,7 +60,7 @@ pub const EngineManager = struct {
 
     // List all available engines
     pub fn listEngines(self: *EngineManager) !void {
-        const c = self.colors;
+        const c = main.colors;
         if (self.engines.items.len == 0) {
             try main.stdout.print("\n{s}No engines found. Use 'engines add' to add chess engines.{s}\n", .{ c.yellow, c.reset });
             return;
@@ -78,7 +78,7 @@ pub const EngineManager = struct {
 
     // Scan directory and load available engines
     pub fn scanEngines(self: *EngineManager) !void {
-        const c = self.colors;
+        const c = main.colors;
         var cwd = std.fs.cwd();
 
         try main.stdout.print("\n{s}Scanning for chess engines...{s}\n", .{ c.blue, c.reset });
@@ -123,7 +123,7 @@ pub const EngineManager = struct {
 
     // Run a specific engine by index
     pub fn runEngine(self: *EngineManager, index: usize) !void {
-        const c = self.colors;
+        const c = main.colors;
         if (index >= self.engines.items.len) {
             return error.InvalidEngineIndex;
         }
@@ -167,7 +167,7 @@ fn getUserInput(reader: anytype, buffer: []u8) !usize {
 pub fn handleEngines(allocator: std.mem.Allocator) !void {
     var manager = try EngineManager.init(allocator);
     defer manager.deinit();
-    const c = manager.colors;
+    const c = main.colors;
 
     try manager.scanEngines();
 

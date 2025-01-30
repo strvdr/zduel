@@ -95,7 +95,7 @@ pub const DisplayManager = struct {
 
         return DisplayManager{
             .allocator = allocator,
-            .colors = Color{},
+            .colors = main.colors,
             .board = board,
             .moveListStartLine = 5,
             .boardStartLine = 5,
@@ -215,7 +215,7 @@ pub const DisplayManager = struct {
     }
 
     pub fn drawBoard(self: *DisplayManager) !void {
-        const c = self.colors;
+        const c = main.colors;
 
         // Save cursor position for move list
         try main.stdout.print("\x1b[s", .{});
@@ -278,7 +278,7 @@ pub const DisplayManager = struct {
     }
 
     pub fn updateMove(self: *DisplayManager, moveStr: []const u8, player: []const u8, moveNumber: usize) !void {
-        const c = self.colors;
+        const c = main.colors;
 
         // Save cursor position
         try main.stdout.print("\x1b[s", .{});
@@ -290,7 +290,7 @@ pub const DisplayManager = struct {
         if (moveNumber % 2 == 1) {
             try main.stdout.print("{d}. {s}{s}{s} {s}", .{
                 @divFloor(moveNumber + 1, 2),
-                c.blue,
+                c.whitePieces,
                 moveStr,
                 c.reset,
                 player,
@@ -298,7 +298,7 @@ pub const DisplayManager = struct {
         } else {
             try main.stdout.print("\x1b[{d};20H{s}{s}{s} {s}", .{
                 line,
-                c.red,
+                c.blackPieces,
                 moveStr,
                 c.reset,
                 player,

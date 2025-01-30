@@ -36,7 +36,6 @@ pub const Logger = struct {
     allocator: std.mem.Allocator,
     file: ?std.fs.File,
     enabled: bool,
-    colors: Color,
     arena: std.heap.ArenaAllocator,
 
     pub fn init(allocator: std.mem.Allocator) !Logger {
@@ -44,7 +43,6 @@ pub const Logger = struct {
             .allocator = allocator,
             .file = null,
             .enabled = false,
-            .colors = Color{},
             .arena = std.heap.ArenaAllocator.init(allocator),
         };
     }

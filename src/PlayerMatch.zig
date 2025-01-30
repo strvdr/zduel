@@ -62,13 +62,13 @@ pub const PlayerMatchManager = struct {
         preset: PlayerMatchPreset,
         playerIsWhite: bool,
     ) !PlayerMatchManager {
-        const colors = Color{};
+        const colors = main.colors;
         var arena = std.heap.ArenaAllocator.init(allocator);
         var logger = try Logger.init(allocator);
         errdefer logger.deinit();
 
         // Initialize engine with appropriate color
-        const engineColor = if (playerIsWhite) colors.red else colors.blue;
+        const engineColor = if (playerIsWhite) main.colors.whitePieces else main.colors.blackPieces;
         const engine = try UciEngine.init(selectedEngine, &arena, engineColor);
 
         var manager = PlayerMatchManager{
@@ -125,7 +125,7 @@ pub const PlayerMatchManager = struct {
         var moves = std.ArrayList([]const u8).init(self.arena.allocator());
         defer moves.deinit();
 
-        const c = self.colors;
+        const c = main.colors;
         var isGameOver = false;
         var winner: ?GameResult = null;
 

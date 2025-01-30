@@ -97,8 +97,13 @@ pub const EloEstimator = struct {
                 .gameCount = 1,
             };
 
-            var match = try MatchManager.init(engine, stockfish, self.allocator, preset, null // No history tracking for calibration matches
+            var match = try MatchManager.init(
+                engine,
+                stockfish,
+                self.allocator,
+                preset,
             );
+
             defer match.deinit();
 
             try match.white.initialize(&match.logger);

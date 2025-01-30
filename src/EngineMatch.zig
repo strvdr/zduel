@@ -39,14 +39,13 @@ const main = @import("main.zig");
 const EnginePlay = @import("EnginePlay.zig");
 const Engine = EnginePlay.Engine;
 const EngineManager = EnginePlay.EngineManager;
-const Color = @import("CLI.zig").Color;
+const CLI = @import("CLI.zig");
 const DisplayManager = @import("DisplayManager.zig").DisplayManager;
 const Logger = @import("logger.zig").Logger;
-const MatchHistory = @import("MatchHistory.zig");
 
 const MatchResult = enum {
-    whiteWin,
-    blackWin,
+    win,
+    loss,
     draw,
 };
 
@@ -287,12 +286,11 @@ pub const MatchManager = struct {
     logger: Logger,
     moveTimeMS: u32,
     gameCount: u32,
-    colors: Color,
+    colors: CLI.Color,
     moveCount: usize = 0,
-    historyManager: ?*MatchHistory.HistoryManager = null,
 
-    pub fn init(whiteEngine: Engine, blackEngine: Engine, allocator: std.mem.Allocator, preset: MatchPreset, historyManager: ?*MatchHistory.HistoryManager) !MatchManager {
-        const colors = Color{};
+    pub fn init(whiteEngine: Engine, blackEngine: Engine, allocator: std.mem.Allocator, preset: MatchPreset) !MatchManager {
+        const colors = main.colors;
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
 
@@ -322,7 +320,6 @@ pub const MatchManager = struct {
             .gameCount = preset.gameCount,
             .colors = colors,
             .moveCount = 0,
-            .historyManager = historyManager,
         };
 
         try manager.logger.start(manager.white.name, manager.black.name);
@@ -358,32 +355,7 @@ pub const MatchManager = struct {
         return key.toOwnedSlice();
     }
 
-    pub fn playMatch(self: *MatchManager) !MatchHistory.HistoryMatchResult {
-        const result = try self.playMatchInternal();
-
-        // Convert result to HistoryMatchResult
-        const matchResult: MatchHistory.HistoryMatchResult = if (result == .whiteWin)
-            .win
-        else if (result == .blackWin)
-            .loss
-        else
-            .draw;
-
-        // Record match result in history if available
-        if (self.historyManager) |hm| {
-            try hm.updateMatchResult(
-                self.white.name,
-                self.black.name,
-                true, // white engine is engine1
-                matchResult,
-            );
-        }
-
-        // Return the converted result
-        return matchResult;
-    }
-
-    fn playMatchInternal(self: *MatchManager) !MatchResult {
+    pub fn playMatch(self: *MatchManager) !MatchResult {
         var display = try DisplayManager.init(self.arena.allocator());
         defer display.deinit();
 
@@ -448,7 +420,7 @@ pub const MatchManager = struct {
                         try main.stdout.print("\n{s}{s} acknowledges defeat!{s}\n", .{
                             currentPlayer.color,
                             currentPlayer.name,
-                            self.colors.reset,
+                            main.colors.reset,
                         });
                         break;
                     }
@@ -466,7 +438,7 @@ pub const MatchManager = struct {
                     try main.stdout.print("\n{s}{s} resigns!{s}\n", .{
                         currentPlayer.color,
                         currentPlayer.name,
-                        self.colors.reset,
+                        main.colors.reset,
                     });
                 } else {
                     try moves.append(m);
@@ -499,14 +471,14 @@ pub const MatchManager = struct {
             }
         }
         try main.stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
-        const c = self.colors;
+        const c = main.colors;
         try main.stdout.print("\n{s}Game Over!{s} ", .{ c.bold, c.reset });
 
         var result = MatchResult.draw;
 
         if (winner) |w| {
             try main.stdout.print("{s}{s}{s} wins by checkmate!\n", .{ w.color, w.name, c.reset });
-            result = if (w == &self.white) .whiteWin else .blackWin;
+            result = if (w == &self.white) .win else .loss;
         } else if (drawReason) |reason| {
             try main.stdout.print("{s}Draw by {s}!{s}\n", .{ c.yellow, reason, c.reset });
         } else {
@@ -549,7 +521,7 @@ fn isStalemate(move: []const u8) bool {
 }
 
 pub fn DisplayMatchPresets() !void {
-    const c = Color{};
+    const c = main.colors;
     try main.stdout.print("\n{s}Available Match Types:{s}\n", .{ c.green, c.reset });
     try main.stdout.print("══════════════════════\n", .{});
 

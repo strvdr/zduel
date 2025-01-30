@@ -41,7 +41,6 @@ const EloEstimator = @import("EloEstimator.zig");
 const DisplayMatchPresets = EngineMatch.DisplayMatchPresets;
 const main = @import("main.zig");
 const cfg = @import("config.zig");
-const MatchHistory = @import("MatchHistory.zig");
 
 pub const Color = struct {
     yellow: []const u8 = "\x1b[33m",
@@ -60,6 +59,7 @@ pub const Color = struct {
     pub fn updateColors(self: *Color, config: cfg.Config) void {
         // Check if the color strings exist and have content
         if (config.engineOneColor.len > 0) {
+            std.debug.print("\ne1c2: {c}", .{config.engineOneColor[0]});
             self.whitePieces = switch (config.engineOneColor[0]) {
                 'r' => self.red,
                 'b' => self.blue,
@@ -72,6 +72,7 @@ pub const Color = struct {
         }
 
         if (config.engineTwoColor.len > 0) {
+            std.debug.print("\ne2c2: {c}", .{config.engineTwoColor[0]});
             self.blackPieces = switch (config.engineTwoColor[0]) {
                 'r' => self.red,
                 'b' => self.blue,
@@ -97,25 +98,20 @@ pub const CLI = struct {
     config: ?cfg.Config = null,
     allocator: std.mem.Allocator,
     engineManager: *EnginePlay.EngineManager,
-    historyManager: ?MatchHistory.HistoryManager = null,
 
     pub fn init(allocator: std.mem.Allocator, engineManager: *EnginePlay.EngineManager) !CLI {
-        var historyManager = try MatchHistory.HistoryManager.init(allocator);
-        try historyManager.loadFromFile();
-
-        return .{
+        const cli = CLI{
             .allocator = allocator,
             .engineManager = engineManager,
-            .historyManager = historyManager,
+            .config = null,
         };
+
+        return cli;
     }
 
     pub fn deinit(self: *CLI) void {
         if (self.config) |*conf| {
             conf.deinit();
-        }
-        if (self.historyManager) |*hm| {
-            hm.deinit();
         }
     }
 
@@ -162,13 +158,6 @@ pub const CLI = struct {
             .category = "Analysis",
             .handler = handleCalibrate,
         },
-        .{
-            .name = "history",
-            .description = "View match history between engines",
-            .usage = "zduel history",
-            .category = "Analysis",
-            .handler = handleHistory,
-        },
     };
 
     pub fn handleConfiguration(self: *CLI, allocator: std.mem.Allocator) !void {
@@ -176,12 +165,12 @@ pub const CLI = struct {
             conf.deinit();
         }
         self.config = try cfg.Config.loadFromFile(allocator);
-        var colors = Color{};
+        var colors = main.colors;
         colors.updateColors(self.config.?);
     }
 
     pub fn handleCommand(self: *CLI, cmd: []const u8) !void {
-        const colors = Color{};
+        const colors = main.colors;
 
         for (CLI.commands) |command| {
             if (std.mem.eql(u8, command.name, cmd)) {
@@ -215,7 +204,7 @@ pub const CLI = struct {
 
 // Keep existing helper functions...
 pub fn printHeader() !void {
-    const colors = Color{};
+    const colors = main.colors;
     try main.stdout.print("\n{s}zduel{s} - A CLI Chess Tool\n", .{ colors.yellow, colors.reset });
     try main.stdout.print("========================\n", .{});
     try main.stdout.print("Type \"{s}help{s}\" to get started, or \"{s}quit{s}\" to exit.\n", .{ colors.green, colors.reset, colors.green, colors.reset });
@@ -229,7 +218,7 @@ fn handleEngines(cli: *CLI) !void {
 
 // Add this function to cli.zig:
 fn handlePlayerMatch(cli: *CLI) !void {
-    const colors = Color{};
+    const colors = main.colors;
     var manager = try EnginePlay.EngineManager.init(cli.allocator);
     defer manager.deinit();
     try manager.scanEngines();
@@ -319,7 +308,7 @@ fn handlePlayerMatch(cli: *CLI) !void {
 // Note: All handlers must accept allocator parameter for consistency, even if unused
 fn showHelp(cli: *CLI) !void {
     _ = cli;
-    const colors = Color{};
+    const colors = main.colors;
     const docUrl = "https://zduel.strydr.net";
 
     try printHeader();
@@ -366,18 +355,9 @@ fn openDocs(cli: *CLI) !void {
     _ = try process.wait();
 }
 
-fn handleHistory(cli: *CLI) !void {
-    if (cli.historyManager) |*hm| {
-        try hm.displayStatistics();
-    } else {
-        const colors = Color{};
-        try main.stdout.print("\n{s}Error loading match history.{s}\n", .{ colors.red, colors.reset });
-    }
-}
-
 // Interactive mode
 pub fn runInteractiveMode(cli: *CLI) !void {
-    const colors = Color{};
+    const colors = main.colors;
     var buf: [1024]u8 = undefined;
 
     try printHeader();
@@ -399,7 +379,7 @@ pub fn runInteractiveMode(cli: *CLI) !void {
 }
 
 pub fn handleMatch(self: *CLI) !void {
-    const colors = Color{};
+    const colors = main.colors;
     var manager = try EnginePlay.EngineManager.init(self.allocator);
     defer manager.deinit();
     try manager.scanEngines();
@@ -448,7 +428,6 @@ pub fn handleMatch(self: *CLI) !void {
         manager.engines.items[blackIndex],
         self.allocator,
         preset,
-        if (self.historyManager) |*hm| hm else null,
     );
     defer match.deinit();
 
@@ -480,7 +459,7 @@ pub fn handleMatch(self: *CLI) !void {
 }
 
 fn printMatchSummary(match: EngineMatch.MatchManager, whiteWins: u32, blackWins: u32, draws: u32) !void {
-    const c = match.colors;
+    const c = main.colors;
     try main.stdout.print("\n{s}Match Results:{s}\n", .{ c.bold, c.reset });
     try main.stdout.print("═════════════\n", .{});
     try main.stdout.print("{s}{s}:{s} {d} wins\n", .{
@@ -524,7 +503,7 @@ fn getUserInput() !usize {
 }
 
 fn handleCalibrate(cli: *CLI) !void {
-    const colors = Color{};
+    const colors = main.colors;
     var manager = try EnginePlay.EngineManager.init(cli.allocator);
     defer manager.deinit();
     try manager.scanEngines();

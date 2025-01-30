@@ -51,6 +51,8 @@ pub const Config = struct {
             config.engineTwoColor = value.data.String;
         }
 
+        std.debug.print("e1c: {s}, e2c: {s}", .{ config.engineOneColor, config.engineTwoColor });
+
         return config;
     }
 

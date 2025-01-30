@@ -56,6 +56,7 @@ const stdout_file = std.io.getStdOut().writer();
 pub var bw = std.io.bufferedWriter(stdout_file);
 pub const stdout = bw.writer();
 pub const stdin = std.io.getStdIn().reader();
+pub var colors = CLI.Color{};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -71,10 +72,10 @@ pub fn main() !void {
     var cliHandler = try CLI.CLI.init(allocator, &manager);
     defer cliHandler.deinit();
 
-    var colors = CLI.Color{};
     // Load and apply config
-    const config = try cfg.Config.loadFromFile(allocator);
+    var config = try cfg.Config.loadFromFile(allocator);
     colors.updateColors(config);
+    defer config.deinit();
 
     // Scan for available engines at startup
     manager.scanEngines() catch {
