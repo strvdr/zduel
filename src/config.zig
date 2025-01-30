@@ -1,39 +1,48 @@
 const std = @import("std");
 const ztoml = @import("ztoml");
 const ArenaAllocator = std.heap.ArenaAllocator;
-
 pub const Config = struct {
     engineOneColor: []const u8,
     engineTwoColor: []const u8,
-    arena: *ArenaAllocator, // Keep the arena alive
+    arena: ?*std.heap.ArenaAllocator, // Make this optional
 
     pub fn init() Config {
         return .{
             .engineOneColor = "blue",
             .engineTwoColor = "red",
-            .arena = undefined,
+            .arena = null, // Initialize as null
         };
     }
 
     pub fn loadFromFile(allocator: std.mem.Allocator) !Config {
-        // Create an arena and store it in the config
-        var arena = try allocator.create(ArenaAllocator);
-        arena.* = ArenaAllocator.init(allocator);
+        // Create arena allocator
+        var arena = try allocator.create(std.heap.ArenaAllocator);
+        errdefer allocator.destroy(arena);
+
+        arena.* = std.heap.ArenaAllocator.init(allocator);
+        errdefer arena.deinit();
 
         // Try to read the config file
         const file = std.fs.cwd().openFile("./.config/zduel.toml", .{}) catch |err| {
-            allocator.destroy(arena);
             if (err == error.FileNotFound) {
-                return Config.init();
+                // If file doesn't exist, return default config but with the arena
+                var default_config = Config.init();
+                default_config.arena = arena;
+                return default_config;
             }
+            // For any other error, clean up and return error
+            arena.deinit();
+            allocator.destroy(arena);
             return err;
         };
         defer file.close();
 
+        // Read file content
         const file_size = try file.getEndPos();
         const tomlContent = try arena.allocator().alloc(u8, file_size);
         _ = try file.readAll(tomlContent);
 
+        // Parse TOML
         var parser = ztoml.Parser.init(arena, tomlContent);
         const result = try parser.parse();
 
@@ -44,6 +53,7 @@ pub const Config = struct {
             .arena = arena,
         };
 
+        // Try to get values from TOML
         if (ztoml.getValue(result, &[_][]const u8{ "Engine Colors", "engineOne" })) |value| {
             config.engineOneColor = value.data.String;
         }
@@ -55,7 +65,10 @@ pub const Config = struct {
     }
 
     pub fn deinit(self: *Config) void {
-        self.arena.deinit();
-        self.arena.child_allocator.destroy(self.arena);
+        if (self.arena) |arena| {
+            arena.deinit();
+            arena.child_allocator.destroy(arena);
+            self.arena = null;
+        }
     }
 };

@@ -9,7 +9,7 @@
     .dependencies = .{
         .ztoml = .{
             .url = "https://github.com/strvdr/ztoml/archive/array-tables.tar.gz",
-            .hash = "12200bda2f723a4c0273888cec381d91ff895c356ab0c98f0c9d5799abdf9c1a8d72",  // This placeholder will make Zig tell us the correct hash
+            .hash = "1220aff6e48da0381b903482f8988afb21e198b65681bf025c96350aa38865c51a0f",  // This placeholder will make Zig tell us the correct hash
         },
     },
 }

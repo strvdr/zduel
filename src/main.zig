@@ -67,14 +67,15 @@ pub fn main() !void {
     var manager = try EnginePlay.EngineManager.init(allocator);
     defer manager.deinit();
 
+    var colors = CLI.Color{};
+    // Load and apply config
+    var config = try cfg.Config.loadFromFile(allocator);
+    colors.updateColors(config);
+    defer config.deinit();
+
     // Initialize CLI
     var cliHandler = try CLI.CLI.init(allocator, &manager);
     defer cliHandler.deinit();
-
-    var colors = CLI.Color{};
-    // Load and apply config
-    const config = try cfg.Config.loadFromFile(allocator);
-    colors.updateColors(config);
 
     // Scan for available engines at startup
     manager.scanEngines() catch {

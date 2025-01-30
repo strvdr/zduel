@@ -97,16 +97,25 @@ pub const CLI = struct {
     config: ?cfg.Config = null,
     allocator: std.mem.Allocator,
     engineManager: *EnginePlay.EngineManager,
-    historyManager: ?MatchHistory.HistoryManager = null,
+    historyManager: ?*MatchHistory.HistoryManager = null,
 
     pub fn init(allocator: std.mem.Allocator, engineManager: *EnginePlay.EngineManager) !CLI {
-        var historyManager = try MatchHistory.HistoryManager.init(allocator);
-        try historyManager.loadFromFile();
+        // Create and initialize history manager
+        var history_manager = try allocator.create(MatchHistory.HistoryManager);
+        errdefer allocator.destroy(history_manager);
 
-        return .{
+        history_manager.* = try MatchHistory.HistoryManager.init(allocator);
+        errdefer history_manager.deinit();
+
+        // Try to load history immediately
+        history_manager.loadFromFile() catch |err| {
+            std.debug.print("Warning: Failed to load history: {s}\n", .{@errorName(err)});
+        };
+
+        return CLI{
             .allocator = allocator,
             .engineManager = engineManager,
-            .historyManager = historyManager,
+            .historyManager = history_manager,
         };
     }
 
@@ -114,8 +123,9 @@ pub const CLI = struct {
         if (self.config) |*conf| {
             conf.deinit();
         }
-        if (self.historyManager) |*hm| {
+        if (self.historyManager) |hm| {
             hm.deinit();
+            self.allocator.destroy(hm);
         }
     }
 
@@ -367,11 +377,19 @@ fn openDocs(cli: *CLI) !void {
 }
 
 fn handleHistory(cli: *CLI) !void {
-    if (cli.historyManager) |*hm| {
+    if (cli.historyManager) |hm| {
+        // Try to load most recent history
+        hm.loadFromFile() catch |err| {
+            std.debug.print("Warning: Failed to load history: {s}\n", .{@errorName(err)});
+            try main.bw.flush();
+        };
+
         try hm.displayStatistics();
+        try main.bw.flush(); // Ensure output is flushed
     } else {
         const colors = Color{};
-        try main.stdout.print("\n{s}Error loading match history.{s}\n", .{ colors.red, colors.reset });
+        try main.stdout.print("\n{s}Error: History manager not initialized{s}\n", .{ colors.red, colors.reset });
+        try main.bw.flush();
     }
 }
 
@@ -448,7 +466,7 @@ pub fn handleMatch(self: *CLI) !void {
         manager.engines.items[blackIndex],
         self.allocator,
         preset,
-        if (self.historyManager) |*hm| hm else null,
+        if (self.historyManager) |hm| hm else null, // Don't take pointer of hm
     );
     defer match.deinit();
 
@@ -518,7 +536,14 @@ fn printMatchSummary(match: EngineMatch.MatchManager, whiteWins: u32, blackWins:
 fn getUserInput() !usize {
     var buf: [100]u8 = undefined;
     if (try main.stdin.readUntilDelimiterOrEof(&buf, '\n')) |userInput| {
-        return try std.fmt.parseInt(usize, std.mem.trim(u8, userInput, &std.ascii.whitespace), 10);
+        const trimmed = std.mem.trim(u8, userInput, &std.ascii.whitespace);
+        if (std.mem.eql(u8, trimmed, "quit")) {
+            return 0;
+        }
+        return std.fmt.parseInt(usize, trimmed, 10) catch |err| {
+            std.debug.print("Invalid input: {s}\n", .{@errorName(err)});
+            return error.InvalidInput;
+        };
     }
     return error.InvalidInput;
 }
