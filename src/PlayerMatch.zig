@@ -150,18 +150,16 @@ pub const PlayerMatchManager = struct {
                 }
 
                 if (!isValidMove(move)) {
-                    // Clear previous message and reprint error
                     try main.stdout.print("\x1b[{d};0H\x1b[J", .{display.boardStartLine + 12});
                     try main.stdout.print("\n{s}Invalid move format. Use standard notation (e.g., e2e4){s}\n", .{ c.red, c.reset });
                     self.move_count -= 1; // Revert move count since this was invalid
                     continue;
                 }
 
-                const player_move = try self.arena.allocator().dupe(u8, move);
-                try moves.append(player_move);
-                try display.updateMove(player_move, "Player", self.move_count);
+                const playerMove = try self.arena.allocator().dupe(u8, move);
+                try moves.append(playerMove);
+                try display.updateMove(playerMove, "Player", self.move_count);
             } else {
-                // Engine's turn
                 const posCommand = try std.fmt.allocPrint(self.arena.allocator(), "position startpos moves {s}", .{try formatMovesList(self.arena.allocator(), &moves)});
 
                 const goCommand = try std.fmt.allocPrint(self.arena.allocator(), "go movetime {d}", .{self.engineTimeMS});

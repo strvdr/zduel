@@ -1,12 +1,28 @@
-[kirin vs kirin-chess]
-[[Engine One]]
-blackWins = 10
-whiteWins = 20
-blackDraws = 12
-whiteDraws = 4
+[metadata]
+generated_at = "2024-01-30T15:30:00Z"
 
-[[Engine Two]]
-blackWins = 20
-whiteWins = 8
-blackDraws = 9
-whiteDraws = 10
+# Track each engine's stats when playing as White
+[white.Stockfish_16]
+vs_Leela = { wins = 25, draws = 40, losses = 35 }
+vs_Komodo = { wins = 30, draws = 35, losses = 35 }
+
+[white.Leela]
+vs_Stockfish_16 = { wins = 35, draws = 40, losses = 25 }
+vs_Komodo = { wins = 28, draws = 42, losses = 30 }
+
+[white.Komodo]
+vs_Stockfish_16 = { wins = 35, draws = 35, losses = 30 }
+vs_Leela = { wins = 30, draws = 42, losses = 28 }
+
+# Track each engine's stats when playing as Black
+[black.Stockfish_16]
+vs_Leela = { wins = 35, draws = 40, losses = 25 }
+vs_Komodo = { wins = 30, draws = 35, losses = 35 }
+
+[black.Leela]
+vs_Stockfish_16 = { wins = 25, draws = 40, losses = 35 }
+vs_Komodo = { wins = 30, draws = 35, losses = 35 }
+
+[black.Komodo]
+vs_Stockfish_16 = { wins = 35, draws = 35, losses = 30 }
+vs_Leela = { wins = 35, draws = 35, losses = 30 }

@@ -30,8 +30,8 @@ pub const Config = struct {
         };
         defer file.close();
 
-        const file_size = try file.getEndPos();
-        const tomlContent = try arena.allocator().alloc(u8, file_size);
+        const fileSize = try file.getEndPos();
+        const tomlContent = try arena.allocator().alloc(u8, fileSize);
         _ = try file.readAll(tomlContent);
 
         var parser = ztoml.Parser.init(arena, tomlContent);

@@ -43,21 +43,21 @@ const main = @import("main.zig");
 const cfg = @import("config.zig");
 
 pub const Color = struct {
-    yellow: []const u8 = "\x1b[33m",
-    green: []const u8 = "\x1b[32m",
     red: []const u8 = "\x1b[31m",
+    green: []const u8 = "\x1b[32m",
+    yellow: []const u8 = "\x1b[33m",
     blue: []const u8 = "\x1b[34m",
     magenta: []const u8 = "\x1b[35m",
     cyan: []const u8 = "\x1b[36m",
-    bold: []const u8 = "\x1b[1m",
     reset: []const u8 = "\x1b[0m",
+    bold: []const u8 = "\x1b[1m",
     dim: []const u8 = "\x1b[2m",
     underline: []const u8 = "\x1b[4m",
+
     whitePieces: []const u8 = "\x1b[34m", // Default to blue
     blackPieces: []const u8 = "\x1b[31m", // Default to red
 
     pub fn updateColors(self: *Color, config: cfg.Config) void {
-        // Check if the color strings exist and have content
         if (config.engineOneColor.len > 0) {
             std.debug.print("\ne1c2: {c}", .{config.engineOneColor[0]});
             self.whitePieces = switch (config.engineOneColor[0]) {
@@ -202,7 +202,6 @@ pub const CLI = struct {
     }
 };
 
-// Keep existing helper functions...
 pub fn printHeader() !void {
     const colors = main.colors;
     try main.stdout.print("\n{s}zduel{s} - A CLI Chess Tool\n", .{ colors.yellow, colors.reset });
@@ -210,13 +209,11 @@ pub fn printHeader() !void {
     try main.stdout.print("Type \"{s}help{s}\" to get started, or \"{s}quit{s}\" to exit.\n", .{ colors.green, colors.reset, colors.green, colors.reset });
 }
 
-// Handler functions...
 fn handleEngines(cli: *CLI) !void {
     try EnginePlay.handleEngines(cli.allocator);
     try main.bw.flush();
 }
 
-// Add this function to cli.zig:
 fn handlePlayerMatch(cli: *CLI) !void {
     const colors = main.colors;
     var manager = try EnginePlay.EngineManager.init(cli.allocator);
@@ -230,7 +227,6 @@ fn handlePlayerMatch(cli: *CLI) !void {
 
     try manager.listEngines();
 
-    // Select engine
     try main.stdout.print("\nSelect engine to play against (1-{d}): ", .{manager.engines.items.len});
     try main.bw.flush();
     const engineIndex = (try getUserInput()) - 1;
@@ -240,7 +236,6 @@ fn handlePlayerMatch(cli: *CLI) !void {
         return;
     }
 
-    // Select color
     try main.stdout.print("\n{s}Choose your color:{s}\n", .{ colors.green, colors.reset });
     try main.stdout.print("1. {s}White{s}\n", .{ colors.whitePieces, colors.reset });
     try main.stdout.print("2. {s}Black{s}\n", .{ colors.blackPieces, colors.reset });
@@ -254,7 +249,6 @@ fn handlePlayerMatch(cli: *CLI) !void {
     }
     const playerIsWhite = colorChoice == 1;
 
-    // Display match presets
     try main.stdout.print("\n{s}Select Difficulty:{s}\n", .{ colors.green, colors.reset });
     try main.stdout.print("==================\n", .{});
 
@@ -280,6 +274,7 @@ fn handlePlayerMatch(cli: *CLI) !void {
 
     if (presetIndex >= PlayerMatch.PLAYER_MATCH_PRESETS.len) {
         try main.stdout.print("{s}Invalid difficulty selection{s}\n", .{ colors.red, colors.reset });
+        try main.bw.flush();
         return;
     }
 
@@ -299,13 +294,14 @@ fn handlePlayerMatch(cli: *CLI) !void {
         preset,
         playerIsWhite,
     );
+
     defer match.deinit();
 
     _ = try match.playGame();
 }
 
 // Handler functions for each command
-// Note: All handlers must accept allocator parameter for consistency, even if unused
+// Note: All handlers must accept cli parameter for consistency, even if unused
 fn showHelp(cli: *CLI) !void {
     _ = cli;
     const colors = main.colors;
@@ -355,7 +351,6 @@ fn openDocs(cli: *CLI) !void {
     _ = try process.wait();
 }
 
-// Interactive mode
 pub fn runInteractiveMode(cli: *CLI) !void {
     const colors = main.colors;
     var buf: [1024]u8 = undefined;
@@ -453,7 +448,6 @@ pub fn handleMatch(self: *CLI) !void {
             .draw => draws += 1,
         }
 
-        // Print results after each game
         try printMatchSummary(match, whiteWins, blackWins, draws);
     }
 }

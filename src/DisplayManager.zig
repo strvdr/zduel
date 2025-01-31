@@ -38,7 +38,7 @@ const Color = CLI.Color;
 pub const DisplayManager = struct {
     allocator: std.mem.Allocator,
     colors: Color,
-    board: [8][8]?*Piece, // Change to store pointers to pieces
+    board: [8][8]?*Piece,
     moveListStartLine: usize,
     boardStartLine: usize,
     currentMove: usize,
@@ -82,7 +82,6 @@ pub const DisplayManager = struct {
     };
 
     pub fn init(allocator: std.mem.Allocator) !DisplayManager {
-        // Clear screen and hide cursor
         try main.stdout.print("\x1b[2J\x1b[?25l", .{});
         try main.bw.flush();
 

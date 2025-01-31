@@ -19,3 +19,44 @@ const ztoml = @import("ztoml");
 const Engine = @import("EnginePlay.zig").Engine;
 const main = @import("main.zig");
 const CLI = @import("CLI.zig");
+
+pub const MatchResult = enum {
+    win,
+    loss,
+    draw,
+};
+
+const matchStats = struct {
+    wins: u32,
+    draws: u32,
+    losses: u32,
+};
+
+pub const EngineHistory = struct {
+    engineOne: []const u8,
+    engineTwo: []const u8,
+    colors: CLI.Color,
+    engineOneSide: bool,
+    arena: std.heap.ArenaAllocator,
+
+    pub fn init(
+        engineOne: []const u8,
+        engineTwo: []const u8,
+        engineOneSide: bool,
+        allocator: std.mem.Allocator,
+    ) !EngineHistory {
+        const colors = main.colors;
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+
+        _ = colors;
+        _ = engineOne;
+        _ = engineTwo;
+        //white is engine one
+        if (engineOneSide == true) {} else {}
+    }
+
+    pub fn deinit(self: *EngineHistory) void {
+        self.arena.deinit();
+    }
+};

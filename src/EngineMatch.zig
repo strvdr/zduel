@@ -42,12 +42,7 @@ const EngineManager = EnginePlay.EngineManager;
 const CLI = @import("CLI.zig");
 const DisplayManager = @import("DisplayManager.zig").DisplayManager;
 const Logger = @import("logger.zig").Logger;
-
-const MatchResult = enum {
-    win,
-    loss,
-    draw,
-};
+const MatchHistory = @import("MatchHistory.zig");
 
 pub const UciEngineError = error{
     ProcessStartFailed,
@@ -355,7 +350,7 @@ pub const MatchManager = struct {
         return key.toOwnedSlice();
     }
 
-    pub fn playMatch(self: *MatchManager) !MatchResult {
+    pub fn playMatch(self: *MatchManager) !MatchHistory.MatchResult {
         var display = try DisplayManager.init(self.arena.allocator());
         defer display.deinit();
 
@@ -474,7 +469,7 @@ pub const MatchManager = struct {
         const c = main.colors;
         try main.stdout.print("\n{s}Game Over!{s} ", .{ c.bold, c.reset });
 
-        var result = MatchResult.draw;
+        var result = MatchHistory.MatchResult.draw;
 
         if (winner) |w| {
             try main.stdout.print("{s}{s}{s} wins by checkmate!\n", .{ w.color, w.name, c.reset });
